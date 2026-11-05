@@ -2,7 +2,7 @@
 // one-shot animation over tracking. Each is a curve of parameter offsets that fades in and out (~0.2 s), so starting
 // one mid-move or pressing it again never jumps. "away" is a state, not a move: eyes closed, head down, slow breath,
 // until it is turned off (or, entered because no face was seen for a while, until a face is back for a second).
-import { smooth, type Params } from './puppet'
+import { smooth, type Params } from './params'
 
 export type ActionId = 'nod' | 'shake' | 'tilt' | 'hop' | 'shy' | 'away'
 

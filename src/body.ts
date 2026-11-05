@@ -5,7 +5,7 @@
 // the idle motion, the drivers, actions, expressions); the Body turns it into its own picture.
 import { ActionPlayer, type ActionId } from './runtime/actions'
 import { pickLabel, uiLang, type Labels } from './runtime/format'
-import { PARAM_RANGES, defaultParams, type Params } from './runtime/puppet'
+import { PARAM_RANGES, defaultParams, type Params } from './runtime/params'
 import { Idle, type Seen } from './follow'
 import type { Driver, Frame, Host, View } from './index'
 
@@ -19,7 +19,11 @@ export interface Pose { params: Params; move: { x: number; y: number; s: number 
 export interface Body {
   /** what kind of character it draws ('png', 'vrm', ...): BodyInfo.format */
   readonly format: string
-  /** loads from its files (by file name); its name and the expressions it can show */
+  /** optional: called before load with the canvas it will draw on; throw if it cannot draw there (the canvas already has
+   *  another kind of context), and load() rejects with that */
+  attach?(canvas: HTMLCanvasElement): void
+  /** loads from its files (by file name); its name and the expressions it can show. If it rejects, the character before
+   *  must stay as it is */
   load(files: Map<string, Blob>): Promise<{ name: string; expressions: BodyExpression[] }>
   /** draws the pose into the canvas, w × h device pixels, dt seconds after the last frame */
   render(canvas: HTMLCanvasElement, pose: Pose, w: number, h: number, dt: number): void
@@ -121,11 +125,18 @@ export class BodyPlayer implements Host {
   get expressions() { return this.info?.expressions ?? [] }
   get playing() { return this.raf !== 0 }
 
-  /** Loads a character from its files (see BodySource) in place of the one before. Loads run one after another */
+  /** Loads a character from its files (see BodySource) in place of the one before (a failed load keeps it). Loads run one
+   *  after another */
   load(source: BodySource): Promise<BodyInfo> {
     const run = this.queue.then(async () => {
-      if (this.disposed) throw new Error('LivLiv: the player was disposed')
-      const got = await this.body.load(await filesOf(source))
+      const stillHere = () => { if (this.disposed) throw new Error('LivLiv: the player was disposed') }
+      stillHere()
+      this.body.attach?.(this.canvas)
+      const files = await filesOf(source)
+      stillHere()
+      const got = await this.body.load(files)
+      if (this.disposed) this.body.dispose()  // disposed while it loaded: nothing of it may stay
+      stillHere()
       const ex = [{ id: 'smile', label: '', labels: SMILE }, ...got.expressions.filter((e) => e.id !== 'smile')
         .map((e) => ({ id: e.id, label: e.label, labels: e.labels ?? { en: e.label } }))]
       this.info = { name: got.name, format: this.body.format,
@@ -154,6 +165,7 @@ export class BodyPlayer implements Host {
   blink() { this.idler.blink(this.time) }
 
   use(driver: Driver): () => void {
+    if (this.disposed) { driver.dispose?.(); return () => {} }  // as Player's: what started meanwhile does not stay on
     this.drivers.push(driver)
     this.drivers.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     return () => {

@@ -8,6 +8,7 @@
   // and action without a WebGL error, and shows its mark; one loads from files instead of a URL, and again as the v3
   // package of the same model (it must draw the same pixels); a model of a newer format is refused.
   import { FORMAT_VERSION, LEGACY_FORMAT, Player } from '../dist/index.js'
+  import { startLipSync } from '../dist/voice.js'
 
   const canvas = document.getElementById('c')
   const g = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
@@ -59,9 +60,9 @@
     const p = new Player(canvas, { autoplay: false, followPointer: false, idle: false })
     const info = await p.load(source)
     p.resize()
-    const d = pixels(), drawn = JSON.parse(JSON.stringify(p.puppet.model))
+    const d = pixels(), drawn = JSON.parse(JSON.stringify(p.puppet.model)), keys = p.puppet.keys.length
     p.dispose()
-    return { d, info, drawn }
+    return { d, info, drawn, keys }
   }
 
   /** what the model's mark changes in a still frame (drawn as it comes, and with the mark off), how much of that lies
@@ -110,6 +111,13 @@
       fromFiles = { error: String(e.message || e) }
     }
 
+    // the same characters as one file from a URL (made by the build): the same frame, keyforms and all
+    const packaged = []
+    for (const p of ids.filter((i) => i === id || FILES[i].includes('keyforms.json'))) {
+      const a = await still(`../characters/${p}/`), b = await still(`../characters/${p}.livliv`)
+      packaged.push({ id: p, changed: changed(a.d, b.d), keys: [a.keys, b.keys] })
+    }
+
     // a newer format: refused, and the model before stays
     let newer
     try {
@@ -134,7 +142,54 @@
     } catch (e) {
       legacy = { error: String(e.message || e) }
     }
-    return { out, fromFiles, newer, legacy }
+    return { out, fromFiles, newer, legacy, packaged }
+  }
+
+  /** disposing while something runs: a load rejects and leaves nothing on the GPU or the canvas; a driver added to a
+   *  disposed player is disposed; a microphone that opens after it is let go */
+  window.runLifecycle = async (id) => {
+    const out = { supported: Player.isSupported() }
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 200px; height: 200px'
+    document.body.append(c)
+    {
+      const p = new Player(c, { followPointer: false }), gl = p.puppet.gl
+      let made = 0, freed = 0
+      const { createTexture, deleteTexture } = gl
+      gl.createTexture = function () { made++; return createTexture.call(gl) }
+      gl.deleteTexture = function (t) { if (t) freed++; return deleteTexture.call(gl, t) }
+      const load = p.load(`../characters/${id}/`).then(() => 'resolved', (e) => e.message)
+      await new Promise((r) => setTimeout(r, 5))
+      p.dispose()
+      out.load = await load
+      p.resize()
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const px = new Uint8Array(4)
+      gl.readPixels(100, 100, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)
+      Object.assign(out, { model: p.model, drawn: px[3], made, freed, glError: gl.getError() })
+    }
+    {
+      const p = new Player(c, { followPointer: false })
+      p.dispose()
+      let disposed = 0
+      const remove = p.use({ update() {}, dispose() { disposed++ } })
+      remove()
+      out.driver = disposed
+      const again = new Player(c, { followPointer: false })
+      await again.load(`../characters/${id}/`)
+      again.resize()
+      out.again = again.model?.name ?? null
+      const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+      let stream
+      navigator.mediaDevices.getUserMedia = async (k) => { stream = await real(k); return stream }
+      const starting = startLipSync(again)
+      again.dispose()
+      await starting
+      navigator.mediaDevices.getUserMedia = real
+      out.mic = stream.getTracks()[0].readyState
+    }
+    c.remove()
+    return out
   }
 
   /** hostile packages: each must be refused (or, for broken keyforms, played on the rig alone), the model before kept */

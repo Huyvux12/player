@@ -32,6 +32,15 @@ jobs:
           cp -r dist example characters media _site/
           cp example/pages-index.html _site/index.html
           touch _site/.nojekyll
+          # the face model's files, served with the pages: the camera demo then needs neither jsDelivr nor Google's bucket
+          # (some networks reach neither). The checksum is of the model the player was tested with
+          mkdir -p _site/mediapipe/wasm
+          cp node_modules/@mediapipe/tasks-vision/vision_bundle.mjs _site/mediapipe/
+          cp node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.* node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_nosimd_internal.* _site/mediapipe/wasm/
+          curl -fsSL --retry 3 -o _site/mediapipe/face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+          echo "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff  _site/mediapipe/face_landmarker.task" | sha256sum -c -
+          sed -i 's#https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@[^/]*/vision_bundle.mjs#../mediapipe/vision_bundle.mjs#' _site/example/demo.html _site/example/png.html _site/example/vrm.html
+          grep -q '"../mediapipe/vision_bundle.mjs"' _site/example/demo.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

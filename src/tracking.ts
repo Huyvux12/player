@@ -3,7 +3,7 @@
 // the @mediapipe/tasks-vision package and downloads ~8 MB of model the first time (the wasm runtime and the face model;
 // cached by the browser after that).
 import { FaceTracker, LOST_AFTER, V, loadFaceModel, setFaceModelFiles, type StartStep } from './runtime/tracking'
-import { defaultParams, type Params } from './runtime/puppet'
+import { defaultParams, type Params } from './runtime/params'
 import type { Driver, Host } from './index'
 
 export type { StartStep }

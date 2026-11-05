@@ -16,7 +16,7 @@
 
 特点：
 
-- WebGL2，无依赖，核心 gzip 后约 34 KB
+- WebGL2，无依赖，核心 gzip 后约 30 KB
 - 口型同步（麦克风、音频、视频）和摄像头面捕（MediaPipe），都在浏览器里运行，按需引入
 - 支持 LivLiv、VRM 和 PNGTuber 三种角色，用同一套接口
 - [`characters/`](characters/) 里有 21 个精选角色，可以直接用

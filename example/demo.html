@@ -17,11 +17,13 @@
 <div class="bar" id="bar"></div>
 <p id="status" role="status"></p>
 
+<script>if (!/[?&]model=/.test(location.search)) document.head.append(Object.assign(document.createElement('link'), { rel: 'preload', as: 'fetch', crossOrigin: 'anonymous', href: '../characters/d03ft.livliv' }))</script>
 <script type="module">
   import { Player } from '../dist/index.js'
   import { cameraButton } from './camera.js'
-  import { loading } from './loading.js'
+  import { loading, needWebGL } from './loading.js'
 
+  needWebGL(Player)
   const player = new Player(document.getElementById('stage'))
   const bar = document.getElementById('bar'), status = document.getElementById('status')
   window.player = player  // to try things in the console
@@ -33,7 +35,8 @@
   // a model: a featured character, ?model=<URL of a model.json or its folder>, or a folder picked below
   async function show(source) {
     status.textContent = ''
-    const done = loading(document.body, typeof source === 'string' && source.endsWith('/') ? `${source}avatar.webp` : null)
+    // a featured character's small picture lies in its folder, beside its package
+    const done = loading(document.body, typeof source === 'string' && /(\/|\.livliv)$/.test(source) ? `${source.replace(/\.livliv$/, '/')}avatar.webp` : null)
     try {
       const m = await player.load(source)
       status.textContent = `${m.name} · ${m.format} ${m.version} · mark: ${m.watermark ?? 'none'}${m.meta?.license ? ` · ${m.meta.license.id}` : ''}`
@@ -72,6 +75,6 @@
     window.camera = cameraButton(button('camera'), player, status)
   }
 
-  show(new URLSearchParams(location.search).get('model') || '../characters/d03ft/')
+  show(new URLSearchParams(location.search).get('model') || '../characters/d03ft.livliv')
 </script>
 </html>

@@ -14,7 +14,7 @@
 
 <p align="center"><img src="media/demo.gif" alt="厳選キャラクターが呼吸し、まばたきし、振り向き、話す様子" width="720"></p>
 
-- WebGL2、依存なし、コアは gzip で約 34 KB
+- WebGL2、依存なし、コアは gzip で約 30 KB
 - リップシンク（マイク、音声、動画）と Web カメラのフェイストラッキング（MediaPipe）はブラウザ内で動作し、必要なときだけ読み込めます
 - LivLiv・VRM・PNGTuber のキャラクターを同じ API で再生
 - [`characters/`](characters/) に厳選キャラクター 21 体。すぐに使えます

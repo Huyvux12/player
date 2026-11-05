@@ -7,6 +7,12 @@ const NOTES = {
   NotReadableError: 'The camera is busy in another app.',
 }
 
+// The face model's files: on the examples' site they are served with the pages (../mediapipe/), else they come from
+// MediaPipe's own hosts, the player's default. On your own site, host them and pass these two the same way.
+const here = (p) => new URL(`../mediapipe/${p}`, location.href).href
+const faceModelFiles = () => fetch(here('face_landmarker.task'), { method: 'HEAD' })
+  .then((r) => (r.ok ? { wasmUrl: here('wasm'), modelUrl: here('face_landmarker.task') } : {}), () => ({}))
+
 const style = document.createElement('style')
 style.textContent = `
   .camera-card { position: fixed; z-index: 2; box-sizing: border-box; width: min(320px, calc(100vw - 24px)); padding: 12px;
@@ -56,6 +62,7 @@ export function cameraButton(button, player, status) {
       const { startFaceTracking } = await import('../dist/tracking.js')
       running = await startFaceTracking(player, {
         trace,
+        ...(trace ? {} : await faceModelFiles()),
         onProgress: (s) => { if (asking) status.textContent = s.step === 'download' ? `Face model ${Math.round(s.progress * 100)}%` : `${s.step}…` },
       })
       asking = false

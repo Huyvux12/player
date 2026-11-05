@@ -96,6 +96,9 @@ export interface Host {
 }
 
 
+/** what the runtime throws when a canvas gives it no WebGL2 context */
+const NO_WEBGL2 = 'this browser has no WebGL2'
+
 /** Plays one LivLiv model on a canvas. Size the canvas with CSS; the drawing follows its size. */
 export class Player implements Host {
   readonly canvas: HTMLCanvasElement
@@ -128,13 +131,21 @@ export class Player implements Host {
   private disposed = false
   private frame: Frame & { move: { x: number; y: number; s: number } }
 
+  /** Whether this browser can play a LivLiv model (WebGL2 starts on a new canvas). Where it cannot, new Player() throws */
+  static isSupported(): boolean {
+    const gl = document.createElement('canvas').getContext('webgl2')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()  // the try takes none of the contexts a page may have at once
+    return !!gl
+  }
+
   constructor(canvas: HTMLCanvasElement, options: PlayerOptions = {}) {
     this.canvas = canvas
     try {
       this.puppet = new Puppet(canvas)
     } catch (e) {
       throw new Error(typeof WebGL2RenderingContext === 'undefined' ? 'LivLiv: this browser has no WebGL2'
-        : `LivLiv: could not start WebGL2 on this canvas (${(e as Error).message})`)
+        : (e as Error).message === NO_WEBGL2 ? 'LivLiv: could not start WebGL2 on this canvas: it is turned off in this browser, or the canvas already draws in 2D'
+          : `LivLiv: could not start WebGL2 on this canvas (${(e as Error).message})`)
     }
     this.puppet.maxDpr = options.maxPixelRatio ?? 2
     this.mark = new Mark(this.puppet.gl)
@@ -172,13 +183,13 @@ export class Player implements Host {
   }
 
   private async loadNow(source: ModelSource): Promise<ModelInfo> {
-    if (this.disposed) throw new Error('LivLiv: the player was disposed')
+    const stillHere = () => { if (this.disposed) throw new Error('LivLiv: the player was disposed') }
+    stillHere()
     const p = this.puppet
     let files: Exclude<ModelSource, string | URL> | null = null
     if (typeof source === 'string' || source instanceof URL) {
       const url = new URL(String(source), document.baseURI)
-      if (/\.(livliv|zip)$/i.test(url.pathname)) files = await fetchPackage(url.href)
-      else {
+      if (/\.(livliv|zip)$/i.test(url.pathname)) { files = await fetchPackage(url.href); stillHere() } else {
         try {
           await p.load(url.href, { pack: false })
         } catch (e) {
@@ -188,8 +199,12 @@ export class Player implements Host {
     } else files = source
     if (files) {
       const { model, image, keyforms } = await fromFiles(files)
+      stillHere()
       await p.loadModel(model, image, { keyforms }).catch((e) => { throw explain(e, 'model.json') })
     }
+    // disposed while the images came in: the runtime built its layers all the same; nothing of them may stay or be drawn
+    if (this.disposed) p.dispose()
+    stillHere()
     const m = p.model
     const ex = m.expressions || (m.layers.some((l) => l.id === 'expr_smile') ? [{ id: 'smile', label: '', labels: SMILE }] : [])
     this.info = {
@@ -231,8 +246,10 @@ export class Player implements Host {
   /** Blinks now (with the idle motion on) */
   blink() { this.idler.blink(this.puppet.time) }
 
-  /** Adds a driver; returns a function that removes it */
+  /** Adds a driver; returns a function that removes it. On a disposed player it is disposed at once: what started
+   *  while the player went (a camera, a microphone) does not stay on */
   use(driver: Driver): () => void {
+    if (this.disposed) { driver.dispose?.(); return () => {} }
     this.drivers.push(driver)
     this.drivers.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     return () => {
@@ -262,7 +279,8 @@ export class Player implements Host {
   /** The current frame as an image (PNG data URL), the mark included */
   snapshot(): string { return this.canvas.toDataURL('image/png') }
 
-  /** Stops, removes the drivers and frees the GPU memory. The canvas can take a new Player afterwards */
+  /** Stops, removes the drivers and frees the GPU memory. A load still running rejects. The canvas can take a new Player
+   *  afterwards */
   dispose() {
     if (this.disposed) return
     this.pause()
@@ -279,7 +297,7 @@ export class Player implements Host {
 
   private draw(dt: number) {
     const p = this.puppet, P = p.params, f = this.frame
-    if (!p.model) return
+    if (!p.model || this.disposed) return
     // the pose from scratch: your values, the idle motion, the drivers
     this.idler.shown(P)
     Object.assign(P, this.params)

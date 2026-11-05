@@ -1,0 +1,56 @@
+// The package as a project that installed it sees it: its entries and types under the moduleResolution settings TypeScript
+// projects use, with the declarations checked (skipLibCheck off). A broken declaration fails here; with skipLibCheck on it
+// would pass and leave `any` behind, which the @ts-expect-error below catches.
+//   npm run build && npm run test:types
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = fileURLToPath(new URL('..', import.meta.url))
+const { name } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+if (!fs.existsSync(path.join(root, 'dist/index.js'))) { console.error('types: build first (npm run build)'); process.exit(1) }
+const dir = path.join(root, 'node_modules/.tmp/consumer')
+fs.rmSync(dir, { recursive: true, force: true })
+fs.mkdirSync(path.join(dir, 'node_modules', path.dirname(name)), { recursive: true })
+fs.symlinkSync(root, path.join(dir, 'node_modules', name), 'dir')
+fs.writeFileSync(path.join(dir, 'use.ts'), `
+import { Player, VERSION, type Driver, type ModelInfo, type View } from '${name}'
+import { preloadFaceModel, startFaceTracking, type FaceTracking } from '${name}/tracking'
+import { createSpeech, startLipSync, type LipSync } from '${name}/voice'
+import { BODY_LIMIT, BodyPlayer, type Body } from '${name}/body'
+import { PngBody } from '${name}/png'
+import { VrmBody } from '${name}/vrm'
+declare const canvas: HTMLCanvasElement
+const player = new Player(canvas)
+const model: Promise<ModelInfo> = player.load('/avatars/sena.livliv')
+const driver: Driver = { update(frame) { frame.add({ angleX: 1 }) } }
+const view: View = player.view
+const tracking: Promise<FaceTracking> = startFaceTracking(player)
+const sync: Promise<LipSync> = startLipSync(player)
+const body: Body = new PngBody()
+player.use(driver)
+void [VERSION, model, view, tracking, sync, preloadFaceModel(), createSpeech(player), BODY_LIMIT, new BodyPlayer(canvas, body), new VrmBody()]
+// the types are real, not any: these must be errors
+// @ts-expect-error not an action
+player.act('nope')
+// @ts-expect-error a name is text
+const n: number = (await model).name
+void n
+`)
+const tsc = createRequire(path.join(root, 'package.json')).resolve('typescript/bin/tsc')
+let failed = 0
+for (const [moduleResolution, module] of [['node16', 'node16'], ['nodenext', 'nodenext'], ['bundler', 'esnext']]) {
+  fs.writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { noEmit: true, strict: true, target: 'es2022', lib: ['es2023', 'dom', 'dom.iterable'],
+    module, moduleResolution, skipLibCheck: false, types: [] }, files: ['use.ts'] }))
+  try {
+    execFileSync(process.execPath, [tsc, '-p', dir], { stdio: 'pipe' })
+    console.log(`ok   moduleResolution ${moduleResolution}`)
+  } catch (e) {
+    failed++
+    console.log(`FAIL moduleResolution ${moduleResolution}\n${String(e.stdout).split('\n').slice(0, 12).join('\n')}`)
+  }
+}
+fs.rmSync(dir, { recursive: true, force: true })
+process.exit(failed ? 1 : 0)

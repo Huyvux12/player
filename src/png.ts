@@ -20,27 +20,39 @@ export class PngBody implements Body {
   private pics: Partial<Record<PngSlot, ImageBitmap>> = {}
   private g: CanvasRenderingContext2D | null = null
 
+  attach(canvas: HTMLCanvasElement) {
+    this.g = canvas.getContext('2d')
+    if (!this.g) throw new Error('LivLiv: this canvas already draws with WebGL (a Player or a VRM): a PNGTuber needs a canvas of its own')
+  }
+
   async load(files: Map<string, Blob>) {
-    this.dispose()
-    let pixels = 0
-    for (const [name, blob] of files) {
-      const slot = PNG_SLOTS.find((s) => name.replace(/\.[^.]*$/, '').toLowerCase() === s.id)?.id
-      if (!slot) continue
-      const b = await createImageBitmap(blob).catch(() => { throw new Error(`LivLiv: ${name} is not an image this browser can read`) })
-      if (b.width > MAX_SIDE || b.height > MAX_SIDE || (pixels += b.width * b.height) > MAX_PIXELS) {
-        b.close()
-        throw new Error(`LivLiv: ${name} is too large (${b.width} x ${b.height})`)
+    // the new pictures apart from the ones shown: anything wrong with them leaves those on the canvas
+    const pics: typeof this.pics = {}
+    let name = 'PNGTuber'
+    try {
+      let pixels = 0
+      for (const [file, blob] of files) {
+        const slot = PNG_SLOTS.find((s) => file.replace(/\.[^.]*$/, '').toLowerCase() === s.id)?.id
+        if (!slot) continue
+        const b = await createImageBitmap(blob).catch(() => { throw new Error(`LivLiv: ${file} is not an image this browser can read`) })
+        pics[slot] = b
+        if (b.width > MAX_SIDE || b.height > MAX_SIDE || (pixels += b.width * b.height) > MAX_PIXELS) throw new Error(`LivLiv: ${file} is too large (${b.width} x ${b.height})`)
       }
-      this.pics[slot] = b
+      if (!pics.closed || !pics.open) throw new Error('LivLiv: a PNGTuber needs at least the closed and the open picture')
+      const txt = files.get('name.txt')
+      if (txt) name = (await txt.slice(0, 200).text()).trim() || name
+    } catch (e) {
+      for (const b of Object.values(pics)) b?.close()
+      throw e
     }
-    if (!this.pics.closed || !this.pics.open) throw new Error('LivLiv: a PNGTuber needs at least the closed and the open picture')
-    const name = files.get('name.txt')
-    return { name: name ? (await name.slice(0, 200).text()).trim() || 'PNGTuber' : 'PNGTuber', expressions: [] }
+    this.dispose()
+    this.pics = pics
+    return { name, expressions: [] }
   }
 
   render(canvas: HTMLCanvasElement, { params: P, move }: Pose, w: number, h: number) {
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
-    const g = (this.g ??= canvas.getContext('2d'))
+    const g = (this.g ??= canvas.getContext('2d'))  // attach() has told the page if it cannot have one
     if (!g) return
     g.clearRect(0, 0, w, h)
     const x = this.pics

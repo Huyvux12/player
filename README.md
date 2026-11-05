@@ -14,7 +14,7 @@
 
 <p align="center"><img src="media/demo.gif" alt="Featured characters breathing, blinking, turning their heads and talking" width="720"></p>
 
-- WebGL2, no dependencies, about 34 KB gzipped for the core
+- WebGL2, no dependencies, about 30 KB gzipped for the core
 - Lip sync (microphone, audio, video) and webcam face tracking (MediaPipe), both in the browser, imported only when you need them
 - Plays LivLiv, VRM and PNGTuber characters through the same API
 - 21 featured characters in [`characters/`](characters/), ready to use

@@ -32,6 +32,13 @@ export class VrmBody implements Body {
   private canvas: HTMLCanvasElement | null = null
   private headAt = { x: 0.5, y: 0.25 }
 
+  attach(canvas: HTMLCanvasElement) {
+    // the attributes render() gives three.js, which then finds this same context
+    if (!canvas.getContext('webgl2', { alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true })) {
+      throw new Error('LivLiv: a VRM needs WebGL2: this browser has none, or this canvas already draws in 2D (a PNGTuber)')
+    }
+  }
+
   async load(files: Map<string, Blob>) {
     const entry = [...files].find(([n]) => /\.(vrm|glb)$/i.test(n))
     if (!entry) throw new Error('LivLiv: no .vrm file among the files')
@@ -40,7 +47,6 @@ export class VrmBody implements Body {
       throw new Error(`LivLiv: a VRM needs the three and @pixiv/three-vrm packages (${(e as Error).message})`)
     })
     this.THREE = THREE
-    this.dispose()
     const loader = new GLTFLoader()
     loader.register((parser) => new VRMLoaderPlugin(parser))
     const url = URL.createObjectURL(entry[1])
@@ -53,14 +59,18 @@ export class VrmBody implements Body {
       URL.revokeObjectURL(url)
     }
     const vrm = gltf.userData.vrm as VRM | undefined
-    if (!vrm) throw new Error(`LivLiv: ${entry[0]} is a glTF without VRM data`)
+    if (!vrm) {
+      VRMUtils.deepDispose(gltf.scene)
+      throw new Error(`LivLiv: ${entry[0]} is a glTF without VRM data`)
+    }
+    // the new character, apart from the one shown (a failed load leaves that on the canvas): it takes over at the end
     VRMUtils.removeUnnecessaryVertices(gltf.scene)
     VRMUtils.combineSkeletons(gltf.scene)
     VRMUtils.rotateVRM0(vrm)  // VRM 0.x faces the other way
     vrm.scene.traverse((o) => { o.frustumCulled = false })
-    this.vrm = vrm
     const h = vrm.humanoid
-    for (const b of ['head', 'neck', 'spine', 'chest'] as const) this.bones[b] = h.getNormalizedBoneNode(b) ?? undefined
+    const bones: typeof this.bones = {}
+    for (const b of ['head', 'neck', 'spine', 'chest'] as const) bones[b] = h.getNormalizedBoneNode(b) ?? undefined
     // arms down from the T pose, a little forward
     const lu = h.getNormalizedBoneNode('leftUpperArm'), ru = h.getNormalizedBoneNode('rightUpperArm')
     if (lu) lu.rotation.set(0, 0, -1.2)
@@ -71,24 +81,31 @@ export class VrmBody implements Body {
     if (vrm.lookAt) vrm.lookAt.autoUpdate = false
     vrm.update(0)
 
-    this.scene = new THREE.Scene()
-    this.scene.add(vrm.scene)
+    const scene = new THREE.Scene()
+    scene.add(vrm.scene)
     const light = new THREE.DirectionalLight(0xffffff, Math.PI)
     light.position.set(1, 1, 1).normalize()
-    this.scene.add(light, new THREE.AmbientLight(0xffffff, 0.6))
+    scene.add(light, new THREE.AmbientLight(0xffffff, 0.6))
     // the head's top to the hips: what a LivLiv character's canvas shows of a person
     const at = (b: 'head' | 'hips') => { const v = new THREE.Vector3(); h.getNormalizedBoneNode(b)?.getWorldPosition(v); return v }
     const head = at('head'), hips = at('hips')
     const top = head.y + 0.2, bottom = hips.y
+    const has = new Set((vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName))
+    const meta = vrm.meta as { name?: string; title?: string } | undefined
+    const expressions: BodyExpression[] = FEELINGS.filter((f) => f !== 'happy' && has.has(f)).map((f) => ({ id: f, label: LABELS[f].en, labels: LABELS[f] }))
+    if (has.has('happy')) expressions.unshift({ id: 'happy', label: LABELS.happy.en, labels: LABELS.happy })
+    const name = (meta?.name || meta?.title || entry[0].replace(/\.(vrm|glb)$/i, '')).slice(0, 200)
+
+    const old = this.vrm
+    this.vrm = vrm
+    this.scene = scene
+    this.bones = bones
+    this.has = has
     this.frame = { height: Math.max(0.1, top - bottom), y: (top + bottom) / 2 }
     this.camera = new THREE.PerspectiveCamera(20, 2 / 3, 0.05, 30)
-    this.place(2 / 3)
-
-    this.has = new Set((vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName))
-    const meta = vrm.meta as { name?: string; title?: string } | undefined
-    const expressions: BodyExpression[] = FEELINGS.filter((f) => f !== 'happy' && this.has.has(f)).map((f) => ({ id: f, label: LABELS[f].en, labels: LABELS[f] }))
-    if (this.has.has('happy')) expressions.unshift({ id: 'happy', label: LABELS.happy.en, labels: LABELS.happy })
-    return { name: (meta?.name || meta?.title || entry[0].replace(/\.(vrm|glb)$/i, '')).slice(0, 200), expressions }
+    this.place(2 / 3)  // render() gives it the canvas's aspect
+    if (old) VRMUtils.deepDispose(old.scene)
+    return { name, expressions }
   }
 
   /** the camera where the framing fits the canvas's aspect */
@@ -111,7 +128,8 @@ export class VrmBody implements Body {
       this.renderer.setClearColor(0x000000, 0)
       this.canvas = canvas
     }
-    if (canvas.width !== w || canvas.height !== h) { this.renderer.setSize(w, h, false); this.place(w / h) }
+    if (canvas.width !== w || canvas.height !== h) this.renderer.setSize(w, h, false)
+    if (this.camera.aspect !== w / h) this.place(w / h)  // a new character's camera, on a canvas already this size too
     const b = this.bones
     // the head turns most, the neck some (yaw: to the screen's right; pitch: up; roll: toward the screen's left)
     b.neck?.rotation.set(-P.angleY * D * 0.35, P.angleX * D * 0.35, -P.angleZ * D * 0.35)

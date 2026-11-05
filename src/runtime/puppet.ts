@@ -17,6 +17,9 @@
 //    the bangs where it lies over them
 //  - body: lags the head turn / tilt, breathes (shoulders + chest), optional chest spring
 import { LIMITS, readModel, type Labels, type ModelFiles, type ModelMeta } from './format'
+import { PARAM_RANGES, defaultParams, smooth, type Params } from './params'
+
+export { PARAM_RANGES, defaultParams, smooth, type Params }
 
 export interface LayerDef {
   id: string; name: string; texture: string
@@ -189,24 +192,6 @@ export const defaultRig = (): Rig => ({
  *  each take its place when set, so a model saved with hair alone moves both as before */
 export type Tuning = { turn: number; nod: number; hair: number; blink: number; expr: number; mouth: number; breath: number; hairFront?: number; hairBack?: number }
 export const defaultTuning = (): Tuning => ({ turn: 1, nod: 1, hair: 1, blink: 1, expr: 1, mouth: 1, breath: 1 })
-export type Params = {
-  angleX: number; angleY: number; angleZ: number
-  eyeLOpen: number; eyeROpen: number; eyeBallX: number; eyeBallY: number
-  browLY: number; browRY: number
-  mouthOpen: number; smile: number
-  /** the voice's vowel (vowel.ts): -1 round (o, u) .. +1 wide (i, e), 0 neither */
-  vowel: number
-  bodyX: number; bodyZ: number; breath: number
-}
-export const defaultParams = (): Params => ({
-  angleX: 0, angleY: 0, angleZ: 0, eyeLOpen: 1, eyeROpen: 1, eyeBallX: 0, eyeBallY: 0,
-  browLY: 0, browRY: 0, mouthOpen: 0, smile: 0, vowel: 0, bodyX: 0, bodyZ: 0, breath: 0,
-})
-export const PARAM_RANGES: Record<keyof Params, [number, number]> = {
-  angleX: [-30, 30], angleY: [-30, 30], angleZ: [-30, 30], eyeLOpen: [0, 1], eyeROpen: [0, 1],
-  eyeBallX: [-1, 1], eyeBallY: [-1, 1], browLY: [-1, 1], browRY: [-1, 1],
-  mouthOpen: [0, 1], smile: [0, 1], vowel: [-1, 1], bodyX: [-10, 10], bodyZ: [-10, 10], breath: [0, 1],
-}
 
 interface GLLayer {
   def: LayerDef
@@ -295,11 +280,6 @@ const NECK_SHADOW = 0.3
 const VOWEL_IN = 0.65, VOWEL_OUT = 0.35
 /** how long after the last open frame the character still counts as talking (s): the gaps between syllables */
 const TALK_LATCH = 0.4
-
-export const smooth = (a: number, b: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
-  return t * t * (3 - 2 * t)
-}
 
 /** cap (optional): per sample the most the brow may move there (model px), where it lies under opaque bangs */
 export type BrowLine = { x: number[]; bottom: number[]; lid: number[]; cap?: number[] }

@@ -1,5 +1,5 @@
 // Webcam face tracking -> puppet params, via MediaPipe Face Landmarker (runs locally in the browser).
-import { smooth, type Params } from './puppet'
+import { smooth, type Params } from './params'
 import { OneEuro } from './filters'
 import { BS, LM, SynthStats, TraceRecorder, TraceSource, synthTrace, type Frame } from './trace'
 

@@ -3,3 +3,5 @@ dist/
 .DS_Store
 # your own unzipped model package, to try the examples with
 example/model/
+# made by the build (scripts/pack-characters.mjs)
+characters/*.livliv

@@ -2,7 +2,7 @@
 
 A lightweight 2.5D character player for the web. `Player` animates a LivLiv model (a `.livliv` package, or its folder:
 `model.json` and `textures/`) on a `<canvas>` with WebGL2; VRM and PNGTuber characters play on the same API through
-`@livliv/player/body`. The core has no dependencies (~98 KB minified, ~34 KB gzipped, the renderer and the idle motion included).
+`@livliv/player/body`. The core has no dependencies (~75 KB minified, ~30 KB gzipped, the renderer and the idle motion included).
 Lip sync and face tracking are separate imports, so you only ship them if you use them.
 
 > Not on npm yet. Build it from this repository (see [Building](#building)) and import `dist/index.js`.
@@ -40,6 +40,8 @@ load, as they are ([FORMAT-v3.md](FORMAT-v3.md)).
 
 - `load()` takes the URL of a `.livliv` file, of `model.json`, or of its folder. Image paths are read relative to
   `model.json`, so the folder can live anywhere: your server, a CDN, another origin.
+- **Prefer the `.livliv` on a page people wait for.** It is one request, where the folder is one for each image (30-70):
+  on a slow path that saved more than half the wait in our measurements, and a browser's cache has only one file to check.
 - **Another origin** (a CDN, `cdn.example.com` while the page is on `example.com`): the server must send
   `Access-Control-Allow-Origin` for `model.json` and every image (WebGL can only read images that allow it). Without it
   `load()` rejects with an error saying so.
@@ -61,6 +63,9 @@ new Player(canvas: HTMLCanvasElement, options?: PlayerOptions)
 | `lang` | the browser's | the language `expressions[].label` is picked in (a BCP 47 tag: `en`, `ja`, `zh-TW` …) |
 
 `idle` and `followPointer` can also be changed later on the player.
+
+`new Player()` throws where WebGL2 cannot start: the browser has none or has it turned off, or the canvas already draws
+in 2D. `Player.isSupported()` asks first, so a page can say so or show a picture instead.
 
 ### `load(source): Promise<ModelInfo>`
 
@@ -133,7 +138,8 @@ only with `idle` off (or use a [driver](#drivers) to add to them). `mouthOpen`, 
 - `play()`, `pause()`, `playing`. The loop also skips drawing while the canvas is scrolled out of view.
 - `resize()`: draws now at the canvas's current size. Only needed after resizing a paused player.
 - `snapshot()`: the current frame as a PNG data URL (with the mark).
-- `dispose()`: stops, removes drivers, frees GPU memory. The canvas can take a new `Player` afterwards.
+- `dispose()`: stops, removes drivers, frees GPU memory. A `load()` still running rejects, and a camera or microphone still
+  starting (`startFaceTracking`, `startLipSync`) is let go as soon as it opens. The canvas can take a new `Player` afterwards.
 - `puppet`: the renderer underneath, for what this API does not cover. Its fields can change between versions.
 
 ### The mark
@@ -294,8 +300,10 @@ await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
   control. Without a bundler, map `three`, `three/examples/jsm/` and `@pixiv/three-vrm` in an import map, as
   `example/vrm.html` does.
 - **Your own**: anything with `load(files)`, `render(canvas, pose, w, h, dt)`, `head()` and `dispose()` (the `Body`
-  type). `pose` has the params after the idle motion and the drivers, the picture's `move` and each expression's weight.
+  type), and if it cares which canvas it gets, `attach(canvas)`. `pose` has the params after the idle motion and the
+  drivers, the picture's `move` and each expression's weight.
 
+A failed `load()` keeps the character before, as on a Player. A canvas has one kind of context for good: a PNGTuber draws in 2D, a Player and a VRM in WebGL2, so a PNGTuber on a canvas that was a Player's (or the other way round) is refused with an error; give it its own.
 A BodyPlayer draws no mark and has no `puppet`; `view.head` is not used. Live2D models (`.moc3`) are not supported:
 reading them takes Live2D's proprietary Cubism Core, under its own licence.
 

@@ -25,9 +25,15 @@
   </div>
   <ul class="cast" id="cast"></ul>
 </main>
+<script>
+  // the first character's package starts downloading before the script below
+  const first = new URLSearchParams(location.search).get('id')
+  document.head.append(Object.assign(document.createElement('link'), { rel: 'preload', as: 'fetch', crossOrigin: 'anonymous',
+    href: `../characters/${first && /^[\w-]+$/.test(first) ? first : 'd03ft'}.livliv` }))
+</script>
 <script type="module">
   import { Player } from '../dist/index.js'
-  import { loading } from './loading.js'
+  import { loading, needWebGL } from './loading.js'
 
   // All the featured characters: one plays on the stage (one player, one WebGL context), the rest wait as their
   // pictures; a click on one puts it on the stage. ?id=<id> starts with that one (else Refined Nana); ?demo=1 plays expressions and
@@ -38,6 +44,7 @@
   const rank = (id) => (FIRST.includes(id) ? FIRST.indexOf(id) : FIRST.length)
   const cast = list.sort((a, b) => rank(a.id) - rank(b.id))  // the rest keep the list's order
 
+  needWebGL(Player)
   const player = new Player(document.getElementById('stage'), { maxPixelRatio: 1.5 })
   const bar = document.getElementById('bar'), name = document.getElementById('name'), ul = document.getElementById('cast')
   const buttons = new Map()
@@ -55,10 +62,18 @@
 
   async function show(id) {
     if (id === current) return
+    const before = current
     current = id
-    for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === id))
+    const press = (on) => { for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === on)) }
+    press(id)
     const done = loading(document.getElementById('view'), `../characters/${id}/avatar.webp`)
-    const m = await player.load(`../characters/${id}/`).finally(done)
+    let m
+    try {
+      m = await player.load(`../characters/${id}.livliv`).finally(done)
+    } catch (e) {  // the one on the stage stays; a click can try this one again
+      if (id === current) { current = before; press(before); name.textContent = e.message }
+      return
+    }
     if (id !== current) return  // another was picked meanwhile
     name.textContent = m.name
     exprs = m.expressions; next = -1

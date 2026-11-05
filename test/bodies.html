@@ -66,6 +66,19 @@
       tracking.stop(); speech.dispose()
       out.png = { name: m.name, format: m.format, expressions: m.expressions.map((e) => e.id), shown, ...seen }
       p.dispose()
+      // a failed load leaves the pictures shown, and the name; on a canvas with WebGL it says so
+      const canvas2 = document.createElement('canvas')
+      canvas2.style.cssText = 'width: 100px; height: 120px'
+      document.body.append(canvas2)
+      const q = new BodyPlayer(canvas2, new PngBody(), { autoplay: false, idle: false })
+      await q.load({ closed: await solid('#ff0000'), open: await solid('#00ff00'), 'name.txt': new Blob(['First']) })
+      const refused = await q.load({ closed: await solid('#0000ff') }).then(() => 'loaded', (e) => e.message)
+      q.resize()
+      out.pngFailed = { refused, kept: q.model?.name, pixel: pixel(canvas2, canvas2.width / 2, canvas2.height * 0.8) }
+      q.dispose(); canvas2.remove()
+      const gl = document.createElement('canvas')
+      gl.getContext('webgl2')
+      out.pngOnGl = await new BodyPlayer(gl, new PngBody(), { autoplay: false }).load({ closed: await solid('#ff0000'), open: await solid('#00ff00') }).then(() => 'loaded', (e) => e.message)
     } catch (e) { out.png = { error: String(e.message || e) } }
     try {
       const canvas = document.getElementById('vrm')
@@ -80,6 +93,24 @@
       const tracking = await startFaceTracking(p, { trace: 'synth' })
       await wait(800)
       tracking.stop()
+      // a second load, on a canvas that is not 2:3 and already has its size, and a failed one
+      const wide = document.createElement('canvas')
+      wide.style.cssText = 'width: 400px; height: 200px'
+      document.body.append(wide)
+      wide.width = 400; wide.height = 200
+      const w = new BodyPlayer(wide, new VrmBody(), { autoplay: false, idle: false })
+      await w.load('/__tiny.vrm'); w.resize()
+      const aspect1 = w.body.camera.aspect
+      await w.load('/__tiny.vrm'); w.resize()
+      const aspect2 = w.body.camera.aspect
+      const bad = new File([new Blob(['not a glb'])], 'x.vrm')
+      const refused = await w.load(bad).then(() => 'loaded', (e) => e.message)
+      w.resize()
+      out.vrmAgain = { aspect1, aspect2, refused, kept: w.model?.name, share: covered(wide) }
+      w.dispose(); wide.remove()
+      const flat = document.createElement('canvas')
+      flat.getContext('2d')
+      out.vrmOn2d = await new BodyPlayer(flat, new VrmBody(), { autoplay: false }).load('/__tiny.vrm').then(() => 'loaded', (e) => e.message)
       const head = p.body.head()
       out.vrm = { name: m.name, format: m.format, expressions: m.expressions.map((e) => e.label), share, happy, smile, unknown, tracked: seen.tracked,
         head: [head.x, head.y].every(Number.isFinite) }

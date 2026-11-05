@@ -5,7 +5,7 @@
 //  - loud onsets now and then lift the brows; the eyes come back to the viewer
 //  - a pause after talking brings a blink
 //  - bounce (optional): the whole character hops a little on syllables, as PNGTubers do
-import { smooth, type Params } from './puppet'
+import { smooth, type Params } from './params'
 
 /** a syllable: the mouth opens by RISE above the last low point, to at least ONSET (within a phrase the voice rarely
  *  closes it between syllables, so a fixed threshold misses most); the next one counts once it has come down by FALL.

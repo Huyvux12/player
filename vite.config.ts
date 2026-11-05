@@ -15,7 +15,9 @@ export default defineConfig({
     },
     rollupOptions: {
       external: ['@mediapipe/tasks-vision', 'three', /^three\//, '@pixiv/three-vrm'],
-      output: { chunkFileNames: 'chunks/[name]-[hash].js' },
+      // minify: true above leaves the whitespace of an ES library in place (and these comments with the file names): the
+      // package's readers download dist as it is from a CDN, so this one takes it out too (pure annotations stay)
+      output: { chunkFileNames: 'chunks/[name]-[hash].js', minify: true },
     },
   },
 })

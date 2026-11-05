@@ -3,7 +3,8 @@
 // character looks back at the viewer when it leaves. What a player tells it each frame (talking or acting, a face tracker
 // driving, an expression showing) and where the pointer is, in one place for Player and BodyPlayer.
 import { LivelyIdle, pointAt } from './runtime/idle'
-import { defaultParams, type Params, type Puppet } from './runtime/puppet'
+import { defaultParams, type Params } from './runtime/params'
+import type { Puppet } from './runtime/puppet'
 
 /** the keys the idle motion sets (with it on, your values for these are not used); its smile is added to yours */
 export const IDLE_KEYS = ['angleX', 'angleY', 'angleZ', 'eyeLOpen', 'eyeROpen', 'eyeBallX', 'eyeBallY', 'browLY', 'browRY', 'bodyX', 'bodyZ', 'breath'] as const

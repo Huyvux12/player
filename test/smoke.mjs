@@ -46,7 +46,8 @@ const server = createServer((req, res) => {
 })
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] })
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] })
 let failed = 0
 try {
   const page = await browser.newPage()
@@ -54,7 +55,7 @@ try {
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto(`http://127.0.0.1:${server.address().port}/test/smoke.html`)
   await page.waitForFunction(() => typeof window.run === 'function')
-  const { out, fromFiles, newer, legacy } = await page.evaluate((a) => window.run(a), { ids, files })
+  const { out, fromFiles, newer, legacy, packaged } = await page.evaluate((a) => window.run(a), { ids, files })
   for (const r of out) {
     // the featured characters carry the LivLiv mark in the corner only: the player must draw it there and nowhere else
     const ok = !r.error && r.share > 0.05 && r.glError === 0 && r.watermark === 'LivLiv' && r.mark > 0.001 && r.outside < 0.0003 && r.noise < 0.0005
@@ -65,6 +66,11 @@ try {
   const filesOk = !fromFiles.error && fromFiles.share > 0.05
   if (!filesOk) failed++
   console.log(`${filesOk ? 'ok  ' : 'FAIL'} from files: ${fromFiles.error ?? `${fromFiles.name}, covers ${(fromFiles.share * 100).toFixed(1)} %`}`)
+  for (const k of packaged) {
+    const ok = k.changed < 0.0005 && k.keys[0] === k.keys[1]
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${k.id}.livliv from a URL: ${(k.changed * 100).toFixed(2)} % of the pixels differ from its folder, keyforms ${k.keys.join(' / ')}`)
+  }
   const legacyOk = !legacy.error && /^livemaker-puppet 3$/.test(legacy.format) && legacy.watermark === null && legacy.changed < 0.0005
   if (!legacyOk) failed++
   console.log(`${legacyOk ? 'ok  ' : 'FAIL'} v3 package: ${legacy.error ?? `${legacy.format}, ${(legacy.changed * 100).toFixed(2)} % of the pixels differ from its v4`}`)
@@ -84,10 +90,17 @@ try {
   if (!kfOk) failed++
   console.log(`${kfOk ? 'ok  ' : 'FAIL'} broken keyforms: ${hostile.keyforms.refused ?? `${hostile.keyforms.name} plays on the rig alone`}`)
 
+  // disposing while something runs (see runLifecycle)
+  const life = await page.evaluate((id) => window.runLifecycle(id), ids[0])
+  const lifeOk = /disposed/.test(life.load) && life.model === null && life.drawn === 0 && life.freed >= life.made && life.glError === 0
+    && life.driver === 1 && !!life.again && life.mic === 'ended' && life.supported === true
+  if (!lifeOk) failed++
+  console.log(`${lifeOk ? 'ok  ' : 'FAIL'} dispose while running: load "${life.load}", ${life.made} textures made, ${life.freed} freed, drawn ${life.drawn}, GL error ${life.glError}, driver disposed ${life.driver}, a new player ${life.again}, microphone ${life.mic}`)
+
   // bodies: a PNGTuber shows each picture and follows the drivers; a VRM loads, draws and takes its expressions
   await page.goto(`http://127.0.0.1:${server.address().port}/test/bodies.html`)
   await page.waitForFunction(() => typeof window.runBodies === 'function')
-  const { png, vrm: v } = await page.evaluate(() => window.runBodies())
+  const { png, vrm: v, pngFailed, pngOnGl, vrmAgain, vrmOn2d } = await page.evaluate(() => window.runBodies())
   const is = (rgb, [r, g, b]) => Math.abs(rgb[0] - r) < 40 && Math.abs(rgb[1] - g) < 40 && Math.abs(rgb[2] - b) < 40
   const pngOk = !png.error && png.format === 'png' && is(png.shown.closed, [255, 0, 0]) && is(png.shown.open, [0, 255, 0])
     && is(png.shown.blink, [0, 0, 255]) && is(png.shown.blinkOpen, [255, 255, 0]) && png.tracked && png.angle > 0 && png.mouth > 0.3
@@ -97,7 +110,35 @@ try {
     && ['Smile', 'Happy', 'Sad'].every((l) => v.expressions.includes(l))
   if (!vrmOk) failed++
   console.log(`${vrmOk ? 'ok  ' : 'FAIL'} VRM: ${v.error ?? `${v.name}, ${v.expressions.join(' / ')}, covers ${(v.share * 100).toFixed(1)} %, face tracked ${v.tracked}`}`)
+  const pfOk = /needs at least/.test(pngFailed?.refused) && pngFailed.kept === 'First' && is(pngFailed.pixel, [255, 0, 0]) && /own/.test(pngOnGl)
+  if (!pfOk) failed++
+  console.log(`${pfOk ? 'ok  ' : 'FAIL'} PNGTuber, a failed load: ${pngFailed?.refused} (kept ${pngFailed?.kept}, pixel ${pngFailed?.pixel}); on a WebGL canvas: ${pngOnGl}`)
+  const vaOk = vrmAgain?.aspect1 === 2 && vrmAgain.aspect2 === 2 && /not a VRM/.test(vrmAgain.refused) && vrmAgain.kept === 'Tiny' && vrmAgain.share > 0.02 && /2D/.test(vrmOn2d)
+  if (!vaOk) failed++
+  console.log(`${vaOk ? 'ok  ' : 'FAIL'} VRM, loaded again on a wide canvas: aspect ${vrmAgain?.aspect1}, ${vrmAgain?.aspect2}; a failed load kept ${vrmAgain?.kept}, covers ${(vrmAgain?.share * 100).toFixed(1)} %; on a 2D canvas: ${vrmOn2d}`)
   if (errors.length) { failed++; console.log(`FAIL page errors:\n  ${errors.join('\n  ')}`) }
+  // no WebGL at all: the example pages say so, the check says no, new Player() says why (the pages fail on purpose: no
+  // error of theirs counts here)
+  const plain = await chromium.launch({ args: ['--disable-gpu', '--disable-software-rasterizer', '--disable-webgl', '--disable-webgl2', '--disable-3d-apis'] })
+  try {
+    const p = await plain.newPage()
+    for (const name of ['index', 'demo', 'gallery']) {
+      await p.goto(`http://127.0.0.1:${server.address().port}/example/${name}.html`)
+      await p.waitForFunction(() => /WebGL2/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
+      const said = /WebGL2/.test(await p.evaluate(() => document.body.innerText))
+      if (!said) failed++
+      console.log(`${said ? 'ok  ' : 'FAIL'} no WebGL: example/${name}.html ${said ? 'says so' : 'says nothing'}`)
+    }
+    const r = await p.evaluate(async () => {
+      const { Player } = await import('/dist/index.js')
+      let thrown = ''
+      try { new Player(document.createElement('canvas')) } catch (e) { thrown = e.message }
+      return { supported: Player.isSupported(), thrown }
+    })
+    const ok = r.supported === false && /turned off/.test(r.thrown)
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} no WebGL: isSupported ${r.supported}, new Player() says "${r.thrown}"`)
+  } finally { await plain.close() }
 } finally {
   await browser.close()
   server.close()
