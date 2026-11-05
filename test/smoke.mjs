@@ -170,6 +170,47 @@ try {
   if (!vaOk) failed++
   console.log(`${vaOk ? 'ok  ' : 'FAIL'} VRM, loaded again on a wide canvas: aspect ${vrmAgain?.aspect1}, ${vrmAgain?.aspect2}; a failed load kept ${vrmAgain?.kept}, covers ${(vrmAgain?.share * 100).toFixed(1)} %; on a 2D canvas: ${vrmOn2d}`)
   if (errors.length) { failed++; console.log(`FAIL page errors:\n  ${errors.join('\n  ')}`) }
+  // the example pages: the cover in the canvas's box until the character is ready, then the character over it
+  for (const name of ['index', 'demo', 'gallery']) {
+    const p = await browser.newPage()
+    let go
+    const held = new Promise((r) => { go = r })
+    await p.route('**/characters/*.livliv', async (route) => { await held; await route.continue() })
+    await p.goto(`http://127.0.0.1:${server.address().port}/example/${name}.html`)
+    const waited = await p.waitForFunction(() => {
+      const c = document.getElementById('cover'), s = document.getElementById('stage'), a = c.getBoundingClientRect(), b = s.getBoundingClientRect()
+      return c.naturalWidth > 0 && !c.hidden && getComputedStyle(s).opacity === '0' && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+    }, null, { timeout: 8000 }).then(() => true, () => false)
+    go()
+    const faded = await p.waitForFunction(() => document.getElementById('cover').hidden && getComputedStyle(document.getElementById('stage')).opacity === '1', null, { timeout: 20000 }).then(() => true, () => false)
+    if (!waited || !faded) failed++
+    console.log(`${waited && faded ? 'ok  ' : 'FAIL'} example/${name}.html: cover first ${waited}, then the character ${faded}`)
+    await p.close()
+  }
+  // ?model=: never a request to another site, however it is written; the page's own files still open
+  for (const name of ['demo', 'vrm']) {
+    const p = await browser.newPage(), asked = []
+    p.on('request', (r) => asked.push(r.url()))
+    let tried = 0, left = 0, said = 0
+    for (const other of ['https://example.invalid/x/', '//example.invalid/x/', '\\\\example.invalid/x/', 'https:example.invalid/x/', ' https://example.invalid/x/']) {
+      await p.goto(`http://127.0.0.1:${server.address().port}/example/${name}.html?model=${encodeURIComponent(other)}`)
+      await p.waitForFunction(() => /this site only/.test(document.getElementById('status').textContent), null, { timeout: 8000 }).then(() => { said++ }, () => {})
+      tried++
+    }
+    left = asked.filter((u) => /example\.invalid/.test(new URL(u).host)).length
+    const ok = said === tried && !left
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} example/${name}.html: ?model= on another site: ${said}/${tried} said no, ${left} requests left this site`)
+    await p.close()
+  }
+  {
+    const p = await browser.newPage()
+    await p.goto(`http://127.0.0.1:${server.address().port}/example/demo.html?model=${encodeURIComponent(`../characters/${ids[0]}/`)}`)
+    const ok = await p.waitForFunction(() => window.player?.model, null, { timeout: 20000 }).then(() => true, () => false)
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} example/demo.html: ?model= on this site opens`)
+    await p.close()
+  }
   // no WebGL at all: the example pages say so, the check says no, new Player() says why (the pages fail on purpose: no
   // error of theirs counts here)
   const plain = await chromium.launch({ args: ['--disable-gpu', '--disable-software-rasterizer', '--disable-webgl', '--disable-webgl2', '--disable-3d-apis'] })
@@ -178,7 +219,11 @@ try {
     for (const name of ['index', 'demo', 'gallery']) {
       await p.goto(`http://127.0.0.1:${server.address().port}/example/${name}.html`)
       await p.waitForFunction(() => /WebGL2/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {})
-      const said = /WebGL2/.test(await p.evaluate(() => document.body.innerText))
+      // said where it can be read: on the first screen, whatever the canvas takes up
+      const said = await p.evaluate(() => {
+        const e = [...document.querySelectorAll('p')].find((x) => /WebGL2/.test(x.textContent)), r = e?.getBoundingClientRect()
+        return !!r && r.top >= 0 && r.bottom <= innerHeight
+      })
       if (!said) failed++
       console.log(`${said ? 'ok  ' : 'FAIL'} no WebGL: example/${name}.html ${said ? 'says so' : 'says nothing'}`)
     }

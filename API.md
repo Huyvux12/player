@@ -30,7 +30,7 @@ Serve the file as it is, or unzip it and serve the folder like any static files:
 sena/
   model.json        # the manifest and the rig: layers, anchors, expressions, meta (author, licence, the mark)
   textures/*.webp   # the layer images
-  avatar.webp       # a small square picture; cover.webp: the character at rest
+  avatar.webp       # a small square picture
   keyforms.json     # head-turn key poses (refined characters only)
 ```
 
@@ -353,4 +353,4 @@ npm run build          # dist/: index.js, tracking.js, voice.js (ES modules), ch
 
 Examples: serve this repository's folder with any static server (for example `python3 -m http.server`) and open
 `/example/` (a few lines) or `/example/demo.html` (expressions, actions, microphone, camera, open a folder;
-`?model=<url>` loads another model). Both start with a featured character from `characters/`.
+`?model=<url>` loads another model from the same site). Both start with a featured character from `characters/`.

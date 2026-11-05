@@ -77,6 +77,8 @@ await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 
 Kujira、Kujira Q 和 Pen 来自别人的作品，不适用上面的许可和署名。它们的来源、署名和条款见 [characters/CREDITS.md](characters/CREDITS.md)。
 
+每个角色还带一张 `cover.webp`（512 x 768，约 50 KB），是它的第一帧，不带标。把它放在画布下面（`object-fit: contain`），角色好了再淡入，[example/loading.js](example/loading.js) 就是这样做的：页面马上有画面，也不会跳一下。
+
 角色列表见[英文 README](README.md#featured-characters)。
 
 ## 用自己的角色

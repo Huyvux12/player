@@ -8,7 +8,8 @@
   main { max-width: 900px; margin: 0 auto; padding: 16px }
   .stage { background: #fff; border-radius: 16px; overflow: hidden }
   .view { position: relative }
-  canvas { display: block; width: 100%; height: min(70vh, 640px); cursor: pointer }
+  canvas { position: relative; display: block; width: 100%; height: min(70vh, 640px); cursor: pointer }
+  #cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px }
   .bar b { margin-right: auto; font-size: 15px }
   #credit { margin: 0; padding: 0 14px 10px; color: #666; font-size: 12px }
@@ -22,7 +23,10 @@
 </style>
 <main>
   <div class="stage">
-    <div class="view" id="view"><canvas id="stage"></canvas></div>
+    <div class="view"><img id="cover" alt=""><canvas id="stage"></canvas></div>
+    <script>  // the first character's cover, before anything else arrives
+      document.getElementById('cover').src = `../characters/${new URLSearchParams(location.search).get('id')?.match(/^\w+$/)?.[0] ?? 'd03ft'}/cover.webp`
+    </script>
     <div class="bar" id="bar"><b id="name"></b></div>
     <p id="credit"></p>
   </div>
@@ -42,7 +46,8 @@
   const cast = list.sort((a, b) => rank(a.id) - rank(b.id))  // the rest keep the list's order
 
   needWebGL(Player)
-  const player = new Player(document.getElementById('stage'), { maxPixelRatio: 1.5 })
+  const canvas = document.getElementById('stage'), cover = document.getElementById('cover')
+  const player = new Player(canvas, { maxPixelRatio: 1.5 })
   const bar = document.getElementById('bar'), name = document.getElementById('name'), credit = document.getElementById('credit'), ul = document.getElementById('cast')
   const buttons = new Map()
   let current = null, exprs = [], next = -1
@@ -63,10 +68,10 @@
     current = id
     const press = (on) => { for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === on)) }
     press(id)
-    const done = loading(document.getElementById('view'), `../characters/${id}/avatar.webp`)
+    const source = `../characters/${id}.livliv`, done = loading(canvas, cover, source)
     let m
     try {
-      m = await loadWithFallback(player, `../characters/${id}.livliv`).finally(done)
+      m = await loadWithFallback(player, source).finally(done)
     } catch (e) {  // the one on the stage stays; a click can try this one again
       if (id === current) { current = before; press(before); name.textContent = e.message }
       return
@@ -86,7 +91,7 @@
     }
   }
   // a click on the stage: the next expression, then neutral again
-  document.getElementById('stage').onclick = () => { next = next + 1 < exprs.length ? next + 1 : -1; player.setExpression(exprs[next]?.id ?? null) }
+  canvas.onclick = () => { next = next + 1 < exprs.length ? next + 1 : -1; player.setExpression(exprs[next]?.id ?? null) }
   await show(cast.some((c) => c.id === q.get('id')) ? q.get('id') : 'd03ft')
 
   if (demo) {

@@ -2,7 +2,8 @@
 // Each featured character as one file, characters/<id>.livliv, next to its folder (FORMAT.md §1: model.json first, images
 // and model.json stored, keyforms.json deflated). The examples load these: one request instead of one per image, which on
 // a slow path saves more than half the wait. Written by `npm run build`, not kept in git: they would only double what the
-// repository holds. The bytes depend on the files alone (no dates), so a build changes nothing it need not.
+// repository holds. The bytes depend on the files alone (no dates), so a build changes nothing it need not. The cover stays
+// out: it is what a page shows before the package arrives.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,7 +16,7 @@ function zip(dir) {
     const p = at ? `${at}/${e.name}` : e.name
     return e.isDirectory() ? list(p) : [p]
   }).sort()
-  const names = ['model.json', ...list().filter((f) => f !== 'model.json')]
+  const names = ['model.json', ...list().filter((f) => f !== 'model.json' && f !== 'cover.webp')]
   const local = [], central = []
   let at = 0
   for (const name of names) {

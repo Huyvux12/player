@@ -33,6 +33,12 @@ describe('featured characters', { skip: !ids.length && 'no characters/ here' }, 
       assert.equal(raw.meta?.watermark?.center, false)
       for (const e of raw.expressions || []) assert.deepEqual(LANGS.filter((l) => !e.label?.[l]), [], `${e.id}'s names`)
       for (const f of Object.values(raw.files || {}) as string[]) assert.ok(existsSync(join(dir, f)), f)
+      // the cover a page shows first: a WebP with alpha (VP8X), 512 x 768, small enough to come well before the package
+      const cover = readFileSync(join(dir, 'cover.webp'))
+      assert.equal(cover.toString('latin1', 8, 16), 'WEBPVP8X')
+      assert.deepEqual([cover.readUIntLE(24, 3) + 1, cover.readUIntLE(27, 3) + 1], [512, 768])
+      assert.ok(cover.length < 120_000, `${cover.length} bytes`)
+      if (existsSync(join(root, `${id}.livliv`))) assert.ok(!readFileSync(join(root, `${id}.livliv`)).includes('cover.webp'), 'the package has no cover')
       // as the player reads it: every image it will ask for is there, each expression has its layer
       const m = readModel(raw, 'en')
       assert.ok(m.name)

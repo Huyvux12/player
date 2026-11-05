@@ -3,19 +3,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LivLiv Player: minimal</title>
-<style>html, body { margin: 0; height: 100%; background: #20222b } canvas { display: block; width: 100%; height: 100% }</style>
+<style>html, body { margin: 0; height: 100%; background: #20222b } canvas { position: relative; display: block; width: 100%; height: 100% }
+#cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain }</style>
+<img id="cover" alt="" src="../characters/d03ft/cover.webp">
 <canvas id="stage"></canvas>
-<p id="wait" style="position:fixed;inset:45% 0 auto;margin:0;color:#eef;font:14px system-ui,sans-serif;text-align:center">Loading…</p>
+<p id="note" style="position:fixed;z-index:1;inset:45% 0 auto;margin:0;color:#eef;font:14px system-ui,sans-serif;text-align:center"></p>
 <script type="module">
   import { Player } from '../dist/index.js'
-  import { loadWithFallback } from './loading.js'
+  import { loadWithFallback, loading } from './loading.js'
 
   // a featured character; your own export works the same
-  const wait = document.getElementById('wait')
-  if (!Player.isSupported()) { wait.textContent = 'This browser has no WebGL2'; throw new Error('no WebGL2') }
-  const player = new Player(document.getElementById('stage'))
-  const model = await loadWithFallback(player, '../characters/d03ft.livliv').catch((e) => { wait.textContent = e.message; throw e })
-  wait.remove()
+  const note = document.getElementById('note'), canvas = document.getElementById('stage')
+  if (!Player.isSupported()) { note.textContent = 'This browser has no WebGL2'; throw new Error('no WebGL2') }
+  const player = new Player(canvas)
+  const done = loading(canvas, document.getElementById('cover'), '../characters/d03ft.livliv')
+  const model = await loadWithFallback(player, '../characters/d03ft.livliv').catch((e) => { note.textContent = e.message; throw e }).finally(done)
 
   // each click shows the next expression, then neutral again
   let i = -1

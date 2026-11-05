@@ -24,11 +24,12 @@
   <button id="mic">microphone</button>
   <button id="cam">camera</button>
 </div>
-<p id="status" role="status">Open a .vrm (VRoid Studio exports them), or add ?model=&lt;URL of a .vrm&gt;</p>
+<p id="status" role="status">Open a .vrm (VRoid Studio exports them), or add ?model=&lt;URL of a .vrm on this site&gt;</p>
 <script type="module">
   import { BodyPlayer } from '../dist/body.js'
   import { VrmBody } from '../dist/vrm.js'
   import { cameraButton } from './camera.js'
+  import { sameSite } from './loading.js'
 
   const player = new BodyPlayer(document.getElementById('stage'), new VrmBody())
   const status = document.getElementById('status'), bar = document.getElementById('bar')
@@ -53,7 +54,8 @@
   }
   document.getElementById('pick').onchange = (e) => e.target.files.length && show(e.target.files[0])
   const url = new URLSearchParams(location.search).get('model')
-  if (url) show(url)
+  if (url && sameSite(url)) show(url)
+  else if (url) status.textContent = '?model= opens files on this site only. For another file, save it and open it here.'
 
   let mic = null
   document.getElementById('mic').onclick = async (e) => {

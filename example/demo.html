@@ -7,12 +7,15 @@
 <script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
 <style>
   html, body { margin: 0; height: 100%; background: #20222b; color: #eef; font: 14px system-ui, sans-serif }
-  canvas { display: block; width: 100%; height: 100% }
+  canvas { position: relative; display: block; width: 100%; height: 100% }
+  #cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none }
   .bar { position: fixed; z-index: 1; left: 12px; right: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px }
   button, label { font: inherit; padding: 6px 11px; border: 0; border-radius: 8px; background: #ffffff1c; color: inherit; cursor: pointer }
   button[aria-pressed="true"] { background: #ff4d5e }
   #status { position: fixed; z-index: 1; left: 12px; bottom: 12px; margin: 0; opacity: .8 }
 </style>
+<img id="cover" alt="" src="../characters/d03ft/cover.webp">
+<script>if (new URLSearchParams(location.search).has('model')) document.getElementById('cover').removeAttribute('src')</script>
 <canvas id="stage"></canvas>
 <div class="bar" id="bar"></div>
 <p id="status" role="status"></p>
@@ -20,10 +23,11 @@
 <script type="module">
   import { Player } from '../dist/index.js'
   import { cameraButton } from './camera.js'
-  import { loadWithFallback, loading, needWebGL } from './loading.js'
+  import { loadWithFallback, loading, needWebGL, sameSite } from './loading.js'
 
   needWebGL(Player)
-  const player = new Player(document.getElementById('stage'))
+  const canvas = document.getElementById('stage'), cover = document.getElementById('cover')
+  const player = new Player(canvas)
   const bar = document.getElementById('bar'), status = document.getElementById('status')
   window.player = player  // to try things in the console
 
@@ -31,11 +35,10 @@
     const b = document.createElement('button'); b.textContent = text; b.onclick = () => onClick(b); bar.append(b); return b
   }
 
-  // a model: a featured character, ?model=<URL of a model.json or its folder>, or a folder picked below
+  // a model: a featured character, ?model=<URL of a model.json or its folder, on this site>, or a file picked below
   async function show(source) {
     status.textContent = ''
-    // a featured character's small picture lies in its folder, beside its package
-    const done = loading(document.body, typeof source === 'string' && /(\/|\.livliv)$/.test(source) ? `${source.replace(/\.livliv$/, '/')}avatar.webp` : null)
+    const done = loading(canvas, cover, source)
     try {
       const m = await loadWithFallback(player, source)
       status.textContent = `${m.name} · ${m.format} ${m.version} · mark: ${m.watermark ?? 'none'}${m.meta?.license ? ` · ${m.meta.license.id}` : ''}`
@@ -76,6 +79,11 @@
     window.camera = cameraButton(button('camera'), player, status)
   }
 
-  show(new URLSearchParams(location.search).get('model') || '../characters/d03ft.livliv')
+  const asked = new URLSearchParams(location.search).get('model')
+  if (!asked || sameSite(asked)) show(asked || '../characters/d03ft.livliv')
+  else {
+    status.textContent = '?model= opens files on this site only. For another file, save it and use the buttons above.'
+    controls(null)
+  }
 </script>
 </html>
