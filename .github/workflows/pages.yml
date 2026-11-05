@@ -41,6 +41,14 @@ jobs:
           echo "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff  _site/mediapipe/face_landmarker.task" | sha256sum -c -
           sed -i 's#https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@[^/]*/vision_bundle.mjs#../mediapipe/vision_bundle.mjs#' _site/example/demo.html _site/example/png.html _site/example/vrm.html
           grep -q '"../mediapipe/vision_bundle.mjs"' _site/example/demo.html
+          # three.js and three-vrm too, for the VRM page, so opening a .vrm online does not depend on a CDN either
+          mkdir -p _site/vendor/three/build _site/vendor/three/examples/jsm/loaders _site/vendor/three/examples/jsm/utils _site/vendor/three-vrm
+          cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js _site/vendor/three/build/
+          cp node_modules/three/examples/jsm/loaders/GLTFLoader.js _site/vendor/three/examples/jsm/loaders/
+          cp node_modules/three/examples/jsm/utils/*.js _site/vendor/three/examples/jsm/utils/
+          cp node_modules/@pixiv/three-vrm/lib/three-vrm.module.min.js _site/vendor/three-vrm/
+          sed -i -e 's#https://cdn.jsdelivr.net/npm/three@[^/]*/build/three.module.js#../vendor/three/build/three.module.js#' -e 's#https://cdn.jsdelivr.net/npm/three@[^/]*/examples/jsm/#../vendor/three/examples/jsm/#' -e 's#https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@[^/]*/lib/three-vrm.module.min.js#../vendor/three-vrm/three-vrm.module.min.js#' _site/example/vrm.html
+          grep -q '"../vendor/three/build/three.module.js"' _site/example/vrm.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

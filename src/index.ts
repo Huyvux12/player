@@ -352,6 +352,10 @@ function explain(e: unknown, where: string): Error {
   return new Error(msg.startsWith('LivLiv') ? msg : `LivLiv: ${msg}`)
 }
 
+/** a file a Player cannot take but a BodyPlayer can: the words that say so */
+const VRM_HERE = 'LivLiv: this is a VRM or glTF file, and a Player plays LivLiv models: use a BodyPlayer with VrmBody (@livliv/player/vrm)'
+const isGlb = async (b: Blob) => { const d = new DataView(await b.slice(0, 4).arrayBuffer()); return d.byteLength === 4 && d.getUint32(0, true) === 0x46546c67 }
+
 /** a .livliv package from a URL, as a Blob. One file is one connection to lose where a folder has dozens, and a dropped one
  *  breaks in the body as often as at the start: tried once more, unless the server said no (4xx). What the page gets is
  *  our words, never the browser's ("Failed to fetch", "Load failed") */
@@ -376,6 +380,7 @@ async function fromFiles(source: Exclude<ModelSource, string | URL>) {
   const files = new Map<string, Blob>()
   const norm = (k: string) => k.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
   const unpack = async (b: Blob) => {
+    if (await isGlb(b)) throw new Error(VRM_HERE)
     if (!(await isZip(b))) throw new Error('LivLiv: this file is not a .livliv package (not a ZIP)')
     return unzip(b).catch((e) => { throw explain(e, 'the package') })
   }
@@ -390,6 +395,7 @@ async function fromFiles(source: Exclude<ModelSource, string | URL>) {
     }
   }
   const json = [...files.keys()].filter(isJson).sort((a, b) => a.length - b.length)[0]
+  if (!json && [...files.keys()].some((k) => /\.(vrm|glb)$/i.test(k))) throw new Error(VRM_HERE)
   if (!json) throw new Error('LivLiv: no model.json among the files')
   const dir = json.slice(0, json.length - 'model.json'.length)
   if (files.get(json)!.size > ZIP_LIMITS.modelJson) throw new Error(`LivLiv: ${json} is larger than ${ZIP_LIMITS.modelJson} bytes`)

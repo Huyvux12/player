@@ -294,11 +294,15 @@ await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
 - **VRM** (`@livliv/player/vrm`): VRM 0.x and 1.0, drawn with [three.js](https://threejs.org) and
   [three-vrm](https://github.com/pixiv/three-vrm), which you install (`npm install three @pixiv/three-vrm`; optional
   peer dependencies, so the rest of the package does not need them). The head and neck turn, the spine sways, the eyes
-  blink and look, the mouth takes the visemes (`aa`, `ee`, `ou` from `mouthOpen` and `vowel`), and the expressions
-  are the model's `happy`, `angry`, `sad`, `relaxed` and `surprised` where it has them; hair and clothes swing by the
-  model's own spring bones. Framed from the head to the hips with the arms down; no hands, no full body, no camera
+  blink and look, the mouth takes the visemes (`aa`, `ee`, `ou`, or `ih`, `oh` where those are missing, from `mouthOpen` and `vowel`),
+  and the expressions are the model's `happy`, `angry`, `sad`, `relaxed` and `surprised` where it has them, then any
+  of its own under the names it gives them; hair and clothes swing by the model's own spring bones, and its constraints apply. Framed from the head to the hips with the arms down; no hands, no full body, no camera
   control. Without a bundler, map `three`, `three/examples/jsm/` and `@pixiv/three-vrm` in an import map, as
   `example/vrm.html` does.
+  A VRM carries its author's terms, and `load()` gives them in `model.meta` (`VrmTerms`), 1.0 and 0.x said alike: `author`,
+  `license`, `use` (who may play it), `commercial`, `violence`, `sexual`, `redistribution` and `modification` (1.0 only), the
+  file's own words in `raw`. The player does not enforce them. A page playing other people's avatars should show them and
+  keep to them, as you would with a LivLiv package's `meta.license`.
 - **Your own**: anything with `load(files)`, `render(canvas, pose, w, h, dt)`, `head()` and `dispose()` (the `Body`
   type), and if it cares which canvas it gets, `attach(canvas)`. `pose` has the params after the idle motion and the
   drivers, the picture's `move` and each expression's weight.
@@ -323,7 +327,10 @@ an error and the model before stays. Before anything reaches the GPU:
 - A name, an expression's label and the mark's text are the author's text: show them with `textContent`, not as HTML.
 
 These limits are `LIMITS` in `src/runtime/format.ts`; the largest model LivLiv has built uses a tenth of them or less.
-VRM files are parsed by three.js's glTF loader. Security reports: [SECURITY.md](SECURITY.md).
+A VRM is looked through before three.js's glTF loader parses it (`VRM_LIMITS` in `@livliv/player/vrm`): a binary glTF, with
+nothing outside itself (a file naming an outside URL is refused, so it cannot make the page fetch anything), 32 MB of
+JSON, 16 777 216 vertices, pictures of 8192 px a side and 536 870 912 pixels in all, read from their headers before they are
+decoded. Security reports: [SECURITY.md](SECURITY.md).
 
 ## Format version
 

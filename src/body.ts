@@ -24,13 +24,16 @@ export interface Body {
   attach?(canvas: HTMLCanvasElement): void
   /** loads from its files (by file name); its name and the expressions it can show. If it rejects, the character before
    *  must stay as it is */
-  load(files: Map<string, Blob>): Promise<{ name: string; expressions: BodyExpression[] }>
+  load(files: Map<string, Blob>): Promise<{ name: string; expressions: BodyExpression[]; meta?: BodyMeta }>
   /** draws the pose into the canvas, w × h device pixels, dt seconds after the last frame */
   render(canvas: HTMLCanvasElement, pose: Pose, w: number, h: number, dt: number): void
   /** where the head is, in shares of the canvas (from the top left) and its radii */
   head(): { x: number; y: number; rx: number; ry: number }
   dispose(): void
 }
+
+/** who made a body character and under what terms, as its file says */
+export interface BodyMeta { author?: { name: string } | null; license?: { id?: string; url?: string } | null }
 
 /** a loaded body character */
 export interface BodyInfo {
@@ -39,6 +42,8 @@ export interface BodyInfo {
   format: string
   /** what setExpression() takes (smile is always there: a param, not an expression) */
   expressions: { id: string; label: string; labels: Labels }[]
+  /** what the file says about itself, where it does: a VRM's author and terms (VrmTerms). null otherwise */
+  meta: BodyMeta | null
 }
 
 /** its files: a URL (one file, a .vrm say), a File / Blob, a FileList / File[], or a map or object of file name -> Blob
@@ -139,7 +144,7 @@ export class BodyPlayer implements Host {
       stillHere()
       const ex = [{ id: 'smile', label: '', labels: SMILE }, ...got.expressions.filter((e) => e.id !== 'smile')
         .map((e) => ({ id: e.id, label: e.label, labels: e.labels ?? { en: e.label } }))]
-      this.info = { name: got.name, format: this.body.format,
+      this.info = { name: got.name, format: this.body.format, meta: got.meta ?? null,
         expressions: ex.map((e) => ({ id: e.id, label: pickLabel(e.labels, this.lang, e.label || e.id), labels: e.labels })) }
       this.expr = {}; this.smile = 0; this.pose.expr = {}
       if (!this.playing) this.draw(0)

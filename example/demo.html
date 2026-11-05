@@ -42,7 +42,9 @@
       controls(m)
     } catch (e) {
       status.textContent = e.message
-      controls(null)
+      // a VRM has its own page here
+      if (/VRM/.test(e.message)) { const a = document.createElement('a'); a.href = 'vrm.html'; a.style.color = 'inherit'; a.textContent = ' Open the VRM page'; status.append(a) }
+      controls(player.model)
     }
     done()
   }
@@ -53,7 +55,7 @@
     pick.innerHTML = 'open a folder… <input type="file" webkitdirectory hidden>'
     pick.querySelector('input').onchange = (e) => e.target.files.length && show(e.target.files)
     const one = document.createElement('label')  // a .livliv package (one file)
-    one.innerHTML = 'open a .livliv… <input type="file" accept=".livliv,.zip" hidden>'
+    one.innerHTML = 'open a .livliv… <input type="file" accept=".livliv,.zip,.vrm,.glb" hidden>'
     one.querySelector('input').onchange = (e) => e.target.files.length && show(e.target.files[0])
     bar.append(pick, one)
     if (!m) return

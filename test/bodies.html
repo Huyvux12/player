@@ -45,6 +45,57 @@
     return new Blob([b.buffer], { type: 'audio/wav' })
   }
 
+  /** what a VRM player says of a file it cannot play, keeping the character before */
+  window.runVrmRefusals = async (urls) => {
+    const c = document.createElement('canvas')
+    const p = new BodyPlayer(c, new VrmBody(), { autoplay: false, idle: false, followPointer: false })
+    await p.load('/__tiny.vrm')
+    const out = {}
+    for (const [k, u] of Object.entries(urls)) out[k] = await p.load(u).then(() => 'loaded', (e) => e.message)
+    out.plainFile = await p.load(new File([new Blob(['not a glb at all, a text file'])], 'x.vrm')).then(() => 'loaded', (e) => e.message)
+    out.kept = p.model?.name
+    p.dispose()
+    return out
+  }
+
+  /** how much of the canvas a VRM covers */
+  window.runVrmShare = async (url) => {
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 300px; height: 400px'
+    document.body.append(c)
+    const p = new BodyPlayer(c, new VrmBody(), { autoplay: false, idle: false, followPointer: false })
+    await p.load(url)
+    p.resize()
+    const share = covered(c)
+    p.dispose(); c.remove()
+    return share
+  }
+
+  /** which way a VRM stands and moves, 1.0 and 0.x alike: arms down, head turning right and up, top of the head to the right
+   *  on a positive roll, eyes up and to the character's left (the screen's right) */
+  window.runVrmPose = async (url) => {
+    const THREE = await import('three')
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 300px; height: 400px'
+    document.body.append(c)
+    const p = new BodyPlayer(c, new VrmBody(), { autoplay: false, idle: false, followPointer: false })
+    await p.load(url)
+    const vrm = p.body.vrm, H = vrm.humanoid, em = vrm.expressionManager
+    const set = (o) => { Object.assign(p.params, { angleX: 0, angleY: 0, angleZ: 0, eyeBallX: 0, eyeBallY: 0, bodyZ: 0 }, o); p.draw(0); p.draw(0) }
+    const world = (b) => { const v = new THREE.Vector3(); H.getRawBoneNode(b).getWorldPosition(v); return v }
+    const q = (b) => { const r = new THREE.Quaternion(); H.getRawBoneNode(b).getWorldQuaternion(r); return r }
+    set({})
+    const rest = q('head'), turned = (v) => new THREE.Vector3(...v).applyQuaternion(q('head').multiply(rest.clone().invert()))
+    const out = { spec: vrm.meta.metaVersion, hand: world('leftHand').y - world('leftUpperArm').y, terms: p.model.meta }
+    set({ angleX: 20 }); out.yaw = turned([0, 0, 1]).x
+    set({ angleY: 20 }); out.pitch = turned([0, 0, 1]).y
+    set({ angleZ: 20 }); out.roll = turned([0, 1, 0]).x
+    set({ eyeBallY: 1 }); out.up = em.getValue('lookUp'); out.down = em.getValue('lookDown')
+    set({ eyeBallX: 1 }); out.right = em.getValue('lookLeft')  // the character's left, seen from the front
+    p.dispose(); c.remove()
+    return out
+  }
+
   window.runBodies = async () => {
     const out = {}
     try {

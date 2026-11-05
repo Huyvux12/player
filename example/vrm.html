@@ -38,7 +38,9 @@
     status.textContent = 'Loading…'
     try {
       const m = await player.load(source)
-      status.textContent = `${m.name} · ${m.format}`
+      // the author's terms come with the file: a page playing other people's avatars should show them
+      const t = m.meta
+      status.textContent = [m.name, m.format, t?.author && `by ${t.author.name}`, t?.license && (t.license.id || t.license.url), t?.commercial && `commercial use: ${t.commercial}`].filter(Boolean).join(' · ')
       bar.querySelectorAll('.x').forEach((b) => b.remove())
       for (const x of [{ id: null, label: 'neutral' }, ...m.expressions]) {
         const b = document.createElement('button'); b.className = 'x'; b.textContent = x.label

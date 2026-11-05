@@ -118,6 +118,10 @@
       packaged.push({ id: p, changed: changed(a.d, b.d), keys: [a.keys, b.keys] })
     }
 
+    // a VRM handed to a Player: refused, saying where it belongs
+    const vrmHere = await player.load(new File([await (await fetch('/__tiny.vrm')).blob()], 'x.vrm')).then(() => 'loaded', (e) => e.message)
+    const vrmFolder = await player.load(new Map([['a/x.vrm', new Blob(['x'])]])).then(() => 'loaded', (e) => e.message)
+
     // a newer format: refused, and the model before stays
     let newer
     try {
@@ -142,7 +146,7 @@
     } catch (e) {
       legacy = { error: String(e.message || e) }
     }
-    return { out, fromFiles, newer, legacy, packaged }
+    return { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder }
   }
 
   /** disposing while something runs: a load rejects and leaves nothing on the GPU or the canvas; a driver added to a

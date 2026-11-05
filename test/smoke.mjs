@@ -53,6 +53,8 @@ const server = createServer((req, res) => {
     return
   }
   if (req.url === '/__tiny.vrm') { res.writeHead(200, { 'content-type': 'model/gltf-binary' }).end(vrm); return }
+  const spoiled = req.url.match(/^\/__tiny\/([^/]+)\.vrm$/)
+  if (spoiled) { res.writeHead(200, { 'content-type': 'model/gltf-binary' }).end(tinyVrm(JSON.parse(decodeURIComponent(spoiled[1])))); return }
   if (req.url === '/__bomb.png') { res.writeHead(200, { 'content-type': 'image/png' }).end(bomb); return }
   const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
   const f = join(root, p)
@@ -70,7 +72,10 @@ try {
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto(`http://127.0.0.1:${server.address().port}/test/smoke.html`)
   await page.waitForFunction(() => typeof window.run === 'function')
-  const { out, fromFiles, newer, legacy, packaged } = await page.evaluate((a) => window.run(a), { ids, files })
+  const { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder } = await page.evaluate((a) => window.run(a), { ids, files })
+  const vrmHereOk = /BodyPlayer/.test(vrmHere) && /BodyPlayer/.test(vrmFolder)
+  if (!vrmHereOk) failed++
+  console.log(`${vrmHereOk ? 'ok  ' : 'FAIL'} a VRM handed to a Player: ${vrmHere}`)
   for (const r of out) {
     // the featured characters carry the LivLiv mark in the corner only: the player must draw it there and nowhere else
     const ok = !r.error && r.share > 0.05 && r.glError === 0 && r.watermark === 'LivLiv' && r.mark > 0.001 && r.outside < 0.0003 && r.noise < 0.0005
@@ -129,9 +134,35 @@ try {
   if (!pngOk) failed++
   console.log(`${pngOk ? 'ok  ' : 'FAIL'} PNGTuber: ${png.error ?? `pictures ${['closed', 'open', 'blink', 'blinkOpen'].map((k) => png.shown[k].join(',')).join(' / ')}, face tracked ${png.tracked} (turn ${png.angle.toFixed(2)}°), speech opens the mouth to ${png.mouth.toFixed(2)}`}`)
   const vrmOk = !v.error && v.format === 'vrm' && v.share > 0.02 && v.happy && v.smile && !v.unknown && v.tracked && v.head
-    && ['Smile', 'Happy', 'Sad'].every((l) => v.expressions.includes(l))
+    && ['Smile', 'Happy', 'Sad', 'Surprised', 'Wink'].every((l) => v.expressions.includes(l))
   if (!vrmOk) failed++
   console.log(`${vrmOk ? 'ok  ' : 'FAIL'} VRM: ${v.error ?? `${v.name}, ${v.expressions.join(' / ')}, covers ${(v.share * 100).toFixed(1)} %, face tracked ${v.tracked}`}`)
+  for (const spec of [1, 0]) {
+    const u = encodeURIComponent(JSON.stringify({ spec }))
+    const r = await page.evaluate((url) => window.runVrmPose(url), `/__tiny/${u}.vrm`)
+    const ok = String(r.spec) === String(spec) && r.hand < -0.1 && r.yaw > 0.1 && r.pitch > 0.1 && r.roll > 0.1 && r.up > 0.05 && r.down === 0 && r.right > 0.05
+      && r.terms.spec === String(spec) && r.terms.author.name === 'LivLiv Player tests' && r.terms.use === 'everyone' && r.terms.commercial === (spec ? 'personal non-profit' : 'allow') && r.terms.license
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} VRM ${spec === 0 ? '0.x' : '1.0'} stands and moves: hand ${r.hand.toFixed(2)} below the shoulder, turn ${r.yaw.toFixed(2)}, nod ${r.pitch.toFixed(2)}, roll ${r.roll.toFixed(2)}, gaze up ${r.up.toFixed(2)} down ${r.down.toFixed(2)} right ${r.right.toFixed(2)}; terms ${r.terms.author.name}, ${r.terms.commercial}`)
+  }
+  // files a VRM player refuses, saying why; one naming an outside file must not make the page ask for it
+  const tiny = (o) => `/__tiny/${encodeURIComponent(JSON.stringify(o))}.vrm`
+  let outsideAsked = 0
+  page.on('request', (r) => { if (new URL(r.url()).pathname === '/__outside.png') outsideAsked++ })
+  const no = await page.evaluate((urls) => window.runVrmRefusals(urls), { noMesh: tiny({ noMesh: true }), draco: tiny({ draco: true }), bigImage: tiny({ bigImage: true }),
+    outside: tiny({ outsideImage: `http://127.0.0.1:${server.address().port}/__outside.png` }) })
+  const noOk = /no mesh/.test(no.noMesh) && /Draco/.test(no.draco) && /too large/.test(no.bigImage) && /outside itself/.test(no.outside) && outsideAsked === 0 && /not a VRM/.test(no.plainFile) && no.kept === 'Tiny'
+  if (!noOk) failed++
+  console.log(`${noOk ? 'ok  ' : 'FAIL'} VRM files refused, the character before kept (${no.kept}), outside requests ${outsideAsked}: ${[no.noMesh, no.draco, no.bigImage, no.outside, no.plainFile].map((m) => m.replace(/^LivLiv: \S+ /, '').slice(0, 34)).join(' | ')}`)
+
+  // in any units: a character 100 times too big, or a tenth of the size, still fills the frame
+  for (const unit of [100, 0.1]) {
+    const u = encodeURIComponent(JSON.stringify({ unit }))
+    const share = await page.evaluate((url) => window.runVrmShare(url), `/__tiny/${u}.vrm`)
+    const ok = share > 0.1
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} VRM in units of ${unit}: covers ${(share * 100).toFixed(1)} % of the canvas`)
+  }
   const pfOk = /needs at least/.test(pngFailed?.refused) && pngFailed.kept === 'First' && is(pngFailed.pixel, [255, 0, 0]) && /own/.test(pngOnGl)
   if (!pfOk) failed++
   console.log(`${pfOk ? 'ok  ' : 'FAIL'} PNGTuber, a failed load: ${pngFailed?.refused} (kept ${pngFailed?.kept}, pixel ${pngFailed?.pixel}); on a WebGL canvas: ${pngOnGl}`)
