@@ -22,6 +22,7 @@
 <script type="module">
   import { BodyPlayer } from '../dist/body.js'
   import { PngBody } from '../dist/png.js'
+  import { cameraButton } from './camera.js'
 
   // a PNGTuber: pictures named closed, open, and if you have them blink and blink-open (any image type). With none
   // picked, a face drawn here stands in
@@ -53,7 +54,7 @@
   document.getElementById('pick').onchange = (e) => e.target.files.length && show(e.target.files)
   show({ closed: await face(true, false), open: await face(true, true), blink: await face(false, false), 'blink-open': await face(false, true) })
 
-  let mic = null, cam = null
+  let mic = null
   document.getElementById('mic').onclick = async (e) => {
     if (mic) { mic.stop(); mic = null } else {
       const { startLipSync } = await import('../dist/voice.js')
@@ -61,12 +62,6 @@
     }
     e.target.setAttribute('aria-pressed', String(!!mic))
   }
-  document.getElementById('cam').onclick = async (e) => {
-    if (cam) { cam.stop(); cam = null } else {
-      const { startFaceTracking } = await import('../dist/tracking.js')
-      cam = await startFaceTracking(player).catch((err) => { status.textContent = err.message; return null })
-    }
-    e.target.setAttribute('aria-pressed', String(!!cam))
-  }
+  window.camera = cameraButton(document.getElementById('cam'), player, status)
 </script>
 </html>

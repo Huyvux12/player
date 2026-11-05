@@ -193,6 +193,18 @@ tracking.calibrate() // the user's current pose becomes "facing front" (it also 
 tracking.stop()
 ```
 
+A refused or missing camera rejects with the browser's error. `trace: 'synth'` plays a demo motion and asks for no camera,
+which makes a good fallback (`example/camera.js` does all of this):
+
+```js
+const tracking = await startFaceTracking(player).catch((e) => {
+  if (e.name === 'NotAllowedError') note('Camera not allowed. Turn it on from the icon in the address bar.')
+  else if (e.name === 'NotFoundError') note('No camera found.')
+  else console.error(e)
+  return startFaceTracking(player, { trace: 'synth' })
+})
+```
+
 | option | default | |
 |---|---|---|
 | `mirror` | `true` | move like a mirror image |

@@ -28,6 +28,7 @@
 <script type="module">
   import { BodyPlayer } from '../dist/body.js'
   import { VrmBody } from '../dist/vrm.js'
+  import { cameraButton } from './camera.js'
 
   const player = new BodyPlayer(document.getElementById('stage'), new VrmBody())
   const status = document.getElementById('status'), bar = document.getElementById('bar')
@@ -52,7 +53,7 @@
   const url = new URLSearchParams(location.search).get('model')
   if (url) show(url)
 
-  let mic = null, cam = null
+  let mic = null
   document.getElementById('mic').onclick = async (e) => {
     if (mic) { mic.stop(); mic = null } else {
       const { startLipSync } = await import('../dist/voice.js')
@@ -60,12 +61,6 @@
     }
     e.target.setAttribute('aria-pressed', String(!!mic))
   }
-  document.getElementById('cam').onclick = async (e) => {
-    if (cam) { cam.stop(); cam = null } else {
-      const { startFaceTracking } = await import('../dist/tracking.js')
-      cam = await startFaceTracking(player).catch((err) => { status.textContent = err.message; return null })
-    }
-    e.target.setAttribute('aria-pressed', String(!!cam))
-  }
+  window.camera = cameraButton(document.getElementById('cam'), player, status)
 </script>
 </html>

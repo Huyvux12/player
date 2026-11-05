@@ -7,6 +7,7 @@
   html, body { margin: 0; min-height: 100%; background: #f4f2ef; font: 14px system-ui, sans-serif; color: #222 }
   main { max-width: 900px; margin: 0 auto; padding: 16px }
   .stage { background: #fff; border-radius: 16px; overflow: hidden }
+  .view { position: relative }
   canvas { display: block; width: 100%; height: min(70vh, 640px); cursor: pointer }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px }
   .bar b { margin-right: auto; font-size: 15px }
@@ -19,16 +20,17 @@
 </style>
 <main>
   <div class="stage">
-    <canvas id="stage"></canvas>
+    <div class="view" id="view"><canvas id="stage"></canvas></div>
     <div class="bar" id="bar"><b id="name"></b></div>
   </div>
   <ul class="cast" id="cast"></ul>
 </main>
 <script type="module">
   import { Player } from '../dist/index.js'
+  import { loading } from './loading.js'
 
   // All the featured characters: one plays on the stage (one player, one WebGL context), the rest wait as their
-  // pictures; a click on one puts it on the stage. ?id=<id> starts with that one; ?demo=1 plays expressions and
+  // pictures; a click on one puts it on the stage. ?id=<id> starts with that one (else Refined Nana); ?demo=1 plays expressions and
   // actions by itself and moves to the next character now and then (for recording the README's GIF)
   const FIRST = ['p01', 'p02', 'd03', 'd03ft', 'p03', 'k01', 'k02', 's01', 'v07']
   const q = new URLSearchParams(location.search), demo = q.get('demo') === '1'
@@ -55,7 +57,8 @@
     if (id === current) return
     current = id
     for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === id))
-    const m = await player.load(`../characters/${id}/`)
+    const done = loading(document.getElementById('view'), `../characters/${id}/avatar.webp`)
+    const m = await player.load(`../characters/${id}/`).finally(done)
     if (id !== current) return  // another was picked meanwhile
     name.textContent = m.name
     exprs = m.expressions; next = -1
@@ -66,7 +69,7 @@
   }
   // a click on the stage: the next expression, then neutral again
   document.getElementById('stage').onclick = () => { next = next + 1 < exprs.length ? next + 1 : -1; player.setExpression(exprs[next]?.id ?? null) }
-  await show(cast.some((c) => c.id === q.get('id')) ? q.get('id') : cast[0].id)
+  await show(cast.some((c) => c.id === q.get('id')) ? q.get('id') : 'd03ft')
 
   if (demo) {
     const acts = ['nod', 'tilt', 'shake', 'hop', 'shy']

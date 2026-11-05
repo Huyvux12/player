@@ -19,6 +19,8 @@
 
 <script type="module">
   import { Player } from '../dist/index.js'
+  import { cameraButton } from './camera.js'
+  import { loading } from './loading.js'
 
   const player = new Player(document.getElementById('stage'))
   const bar = document.getElementById('bar'), status = document.getElementById('status')
@@ -30,7 +32,8 @@
 
   // a model: a featured character, ?model=<URL of a model.json or its folder>, or a folder picked below
   async function show(source) {
-    status.textContent = 'Loading…'
+    status.textContent = ''
+    const done = loading(document.body, typeof source === 'string' && source.endsWith('/') ? `${source}avatar.webp` : null)
     try {
       const m = await player.load(source)
       status.textContent = `${m.name} · ${m.format} ${m.version} · mark: ${m.watermark ?? 'none'}${m.meta?.license ? ` · ${m.meta.license.id}` : ''}`
@@ -39,6 +42,7 @@
       status.textContent = e.message
       controls(null)
     }
+    done()
   }
 
   function controls(m) {
@@ -56,7 +60,7 @@
       exprs.forEach((o) => o.setAttribute('aria-pressed', String(o === b)))
     }))
     for (const a of ['nod', 'shake', 'tilt', 'hop']) button(a, () => player.act(a))
-    let mic = null, cam = null
+    let mic = null
     button('microphone', async (b) => {
       if (mic) { mic.stop(); mic = null } else {
         const { startLipSync } = await import('../dist/voice.js')
@@ -64,18 +68,10 @@
       }
       b.setAttribute('aria-pressed', String(!!mic))
     })
-    button('camera', async (b) => {
-      if (cam) { cam.stop(); cam = null } else {
-        const { startFaceTracking } = await import('../dist/tracking.js')
-        cam = await startFaceTracking(player, {
-          onProgress: (s) => { status.textContent = s.step === 'download' ? `Face model ${Math.round(s.progress * 100)}%` : `${s.step}…` },
-        }).catch((e) => { status.textContent = e.message; return null })
-        if (cam) status.textContent = 'Camera on'
-      }
-      b.setAttribute('aria-pressed', String(!!cam))
-    })
+    window.camera?.running?.stop()  // a new model, new buttons: the old button's tracking ends with it
+    window.camera = cameraButton(button('camera'), player, status)
   }
 
-  show(new URLSearchParams(location.search).get('model') || '../characters/k01/')
+  show(new URLSearchParams(location.search).get('model') || '../characters/d03ft/')
 </script>
 </html>
