@@ -293,13 +293,17 @@ await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
   voice is loud, the blink ones when the eyes close. The picture sways, tilts and breathes with the head and body and
   hops with the voice; there are no expressions but the smile param, and no turn beyond that sway. `name.txt` names it.
 - **VRM** (`@livliv/player/vrm`): VRM 0.x and 1.0, drawn with [three.js](https://threejs.org) and
-  [three-vrm](https://github.com/pixiv/three-vrm), which you install (`npm install three @pixiv/three-vrm`; optional
-  peer dependencies, so the rest of the package does not need them). The head and neck turn, the spine sways, the eyes
+  [three-vrm](https://github.com/pixiv/three-vrm), which you install (`npm install three @pixiv/three-vrm`; three.js 0.170
+  or newer, played here on 0.170, 0.186 and 0.187 with three-vrm 3.5.5; optional peer dependencies, so the rest of the
+  package does not need them). Files from VRoid Studio, UniVRM and the VRM add-on for Blender play. The head and neck turn, the spine sways, the eyes
   blink and look, the mouth takes the visemes (`aa`, `ee`, `ou`, or `ih`, `oh` where those are missing, from `mouthOpen` and `vowel`),
   and the expressions are the model's `happy`, `angry`, `sad`, `relaxed` and `surprised` where it has them, then any
   of its own under the names it gives them; hair and clothes swing by the model's own spring bones, and its constraints apply. Framed from the head to the hips with the arms down; no hands, no full body, no camera
   control. Without a bundler, map `three`, `three/examples/jsm/` and `@pixiv/three-vrm` in an import map, as
   `example/vrm.html` does.
+  A file compressed with Draco, Meshopt or KTX2 needs decoders, which the player does not ship: without them `load()` says
+  so, and `new VrmBody({ configureLoader: (loader) => { /* setDRACOLoader, setMeshoptDecoder, setKTX2Loader */ } })` is where
+  yours go. Animation files (`.vrma`) are not played.
   A VRM carries its author's terms, and `load()` gives them in `model.meta` (`VrmTerms`), 1.0 and 0.x said alike: `author`,
   `license`, `use` (who may play it), `commercial`, `violence`, `sexual`, `redistribution` and `modification` (1.0 only), the
   file's own words in `raw`. The player does not enforce them. A page playing other people's avatars should show them and
@@ -351,7 +355,7 @@ WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+, on desktop and
 
 ```sh
 npm install
-npm run build          # dist/: index.js, tracking.js, voice.js (ES modules), chunks/ and types/
+npm run build          # dist/: index.js, body.js, png.js, vrm.js, tracking.js, voice.js (ES modules), chunks/ and types/
 ```
 
 Examples: serve this repository's folder with any static server (for example `python3 -m http.server`) and open
