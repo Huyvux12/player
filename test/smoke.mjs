@@ -59,7 +59,7 @@ try {
   for (const r of out) {
     // the featured characters carry the LivLiv mark in the corner only: the player must draw it there and nowhere else
     const ok = !r.error && r.share > 0.05 && r.glError === 0 && r.watermark === 'LivLiv' && r.mark > 0.001 && r.outside < 0.0003 && r.noise < 0.0005
-      && r.license === 'LicenseRef-LivLiv-Samples'
+      && r.license === ({ p01: 'CC-BY-NC-SA-4.0', p02: 'CC-BY-NC-SA-4.0', p03: 'LicenseRef-Third-Party-Character' }[r.id] ?? 'LicenseRef-LivLiv-Samples')
     if (!ok) failed++
     console.log(`${ok ? 'ok  ' : 'FAIL'} ${r.id.padEnd(6)} ${r.error ?? `${r.name} (${r.format}), ${r.expressions}, covers ${(r.share * 100).toFixed(1)} %, mark ${r.watermark} on ${(r.mark * 100).toFixed(2)} % (outside the corner ${(r.outside * 100).toFixed(2)} %, noise ${(r.noise * 100).toFixed(2)} %), ${r.ms} ms${r.glError ? `, GL error ${r.glError}` : ''}`}`)
   }

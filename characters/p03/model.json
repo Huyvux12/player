@@ -8,9 +8,9 @@
   },
   "created": "2026-11-04T15:21:51Z",
   "license": {
-   "id": "LicenseRef-LivLiv-Samples",
-   "url": "https://livliv.ai/licenses/samples",
-   "text": "LivLiv Featured Characters License 1.0: free for non-commercial use with credit (\"Characters: LivLiv (livliv.ai)\"); no selling or separate distribution, no commercial use without permission, no AI training. The full text is LICENSE.md beside the characters."
+   "id": "LicenseRef-Third-Party-Character",
+   "url": "https://github.com/livliv-dev/player/blob/main/characters/CREDITS.md",
+   "text": "Not under the Apache License or the LivLiv Featured Characters License. LivLiv holds no rights in this character and grants none: see CREDITS.md beside the characters."
   },
   "watermark": {
    "kind": "livliv",

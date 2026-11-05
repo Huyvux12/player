@@ -73,7 +73,9 @@ await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 
 ## 精选角色
 
-`characters/` 里是 LivLiv 制作的 21 个角色，可以直接 `load()`。它们右下角带一个小小的 LivLiv 标，播放器会画出来。它们**不**适用 Apache 许可：个人非商业用途可以免费使用，请署名（「角色：LivLiv（livliv.ai）」）；不能出售、不能商用、不能用来训练 AI 模型。Nana 是 LivLiv 的吉祥物。完整条款见 [characters/LICENSE.md](characters/LICENSE.md)。
+`characters/` 里有 21 个角色，可以直接 `load()`。它们右下角带一个小小的 LivLiv 标，播放器会画出来。它们**不**适用 Apache 许可。大部分由 LivLiv 制作：个人非商业用途可以免费使用，请署名（「角色：LivLiv（livliv.ai）」）；不能出售、不能商用、不能用来训练 AI 模型。Nana 是 LivLiv 的吉祥物。完整条款见 [characters/LICENSE.md](characters/LICENSE.md)。
+
+Kujira、Kujira Q 和 Pen 来自别人的作品，不适用上面的许可和署名。它们的来源、署名和条款见 [characters/CREDITS.md](characters/CREDITS.md)。
 
 角色列表见[英文 README](README.md#featured-characters)。
 
@@ -91,7 +93,7 @@ LivLiv Player 和 `.livliv` 格式是 LivLiv 独立做的，没有用 Live2D 的
 
 在 livliv.ai 上制作角色会用到 AI。播放器本身只负责播放：不调用 AI 服务，只读取你指给它的文件。面捕在浏览器里运行 Google 的 MediaPipe，摄像头画面不离开设备；网络方面的细节见 API.md。
 
-仓库里的精选角色也是在 LivLiv 上做的，同样用到了 AI。Nana 精修版（`d03ft`）另外用 LivLiv 自己的工具加了会摆动的部件和转头的关键形。
+仓库里的精选角色也是在 LivLiv 上做的，同样用到了 AI；Kujira、Kujira Q 和 Pen 改编自别人的角色（[来源](characters/CREDITS.md)）。Nana 精修版（`d03ft`）另外用 LivLiv 自己的工具加了会摆动的部件和转头的关键形。
 
 模型包里的 `meta.author` 和 `meta.license` 记的是署名和使用条款，请保留并遵守。公开展示用 LivLiv 做的角色时，请注明 AI 参与制作，不要说成手绘或人工绑定的作品。
 

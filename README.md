@@ -75,10 +75,13 @@ are described in [FORMAT-v3.md](FORMAT-v3.md) and still play.
 
 ## Featured characters
 
-`characters/` holds 21 characters made by LivLiv, ready to `load()`. They carry a small LivLiv mark in the
-bottom-right corner, which the player draws. They are **not** covered by the Apache License: use them free for personal, non-commercial projects with credit
+`characters/` holds 21 characters, ready to `load()`. They carry a small LivLiv mark in the bottom-right corner, which
+the player draws. They are **not** covered by the Apache License. Most were made by LivLiv: use those free for personal, non-commercial projects with credit
 ("Characters: LivLiv (livliv.ai)"); don't sell them, use them commercially or train AI models on them. Nana is
 LivLiv's mascot. The terms are in [characters/LICENSE.md](characters/LICENSE.md).
+
+Kujira, Kujira Q and Pen come from other people's work: that licence and that credit don't cover them. Their sources,
+credits and terms are in [characters/CREDITS.md](characters/CREDITS.md).
 
 | id | name | id | name | id | name |
 |---|---|---|---|---|---|
@@ -110,7 +113,8 @@ Making a character on livliv.ai uses AI. The player itself only plays: it calls 
 you point it at. Face tracking runs Google's MediaPipe in the browser, and camera images stay on the device; API.md has
 the networking details.
 
-The featured characters in this repository were made on LivLiv too, also with AI. Refined Nana (`d03ft`) also has
+The featured characters in this repository were made on LivLiv too, also with AI; Kujira, Kujira Q and Pen adapt other
+people's characters ([credits](characters/CREDITS.md)). Refined Nana (`d03ft`) also has
 swinging parts and head-turn keyforms added with LivLiv's own tools.
 
 A package's `meta.author` and `meta.license` record who made it and on what terms: keep them and follow them. When you

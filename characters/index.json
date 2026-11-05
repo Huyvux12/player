@@ -33,15 +33,18 @@
  },
  {
   "id": "p01",
-  "name": "Kujira"
+  "name": "Kujira",
+  "credit": "Kujira: 上善无形, ZipZipPipe (CC BY-NC-SA 4.0); model by LivLiv"
  },
  {
   "id": "p02",
-  "name": "Kujira Q"
+  "name": "Kujira Q",
+  "credit": "Kujira Q: 上善无形, ZipZipPipe (CC BY-NC-SA 4.0); model by LivLiv"
  },
  {
   "id": "p03",
-  "name": "Pen"
+  "name": "Pen",
+  "credit": "Pen: based on 咕咕嘎嘎 by 贱兔死顺盖; LivLiv holds no rights in this character"
  },
  {
   "id": "q02",

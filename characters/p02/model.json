@@ -7,10 +7,13 @@
    "name": "livliv.ai"
   },
   "created": "2026-11-05T10:05:34Z",
+  "author": {
+   "name": "上善无形, ZipZipPipe"
+  },
   "license": {
-   "id": "LicenseRef-LivLiv-Samples",
-   "url": "https://livliv.ai/licenses/samples",
-   "text": "LivLiv Featured Characters License 1.0: free for non-commercial use with credit (\"Characters: LivLiv (livliv.ai)\"); no selling or separate distribution, no commercial use without permission, no AI training. The full text is LICENSE.md beside the characters."
+   "id": "CC-BY-NC-SA-4.0",
+   "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+   "text": "CC BY-NC-SA 4.0: see CREDITS.md beside the characters."
   },
   "watermark": {
    "kind": "livliv",

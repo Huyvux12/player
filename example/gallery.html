@@ -11,6 +11,8 @@
   canvas { display: block; width: 100%; height: min(70vh, 640px); cursor: pointer }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px }
   .bar b { margin-right: auto; font-size: 15px }
+  #credit { margin: 0; padding: 0 14px 10px; color: #666; font-size: 12px }
+  #credit:empty { display: none }
   .bar button { font: inherit; padding: 5px 10px; border: 0; border-radius: 8px; background: #eee; cursor: pointer }
   .cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 8px; margin-top: 12px; padding: 0; list-style: none }
   .cast button { width: 100%; padding: 4px; border: 2px solid transparent; border-radius: 12px; background: #fff; cursor: pointer }
@@ -22,6 +24,7 @@
   <div class="stage">
     <div class="view" id="view"><canvas id="stage"></canvas></div>
     <div class="bar" id="bar"><b id="name"></b></div>
+    <p id="credit"></p>
   </div>
   <ul class="cast" id="cast"></ul>
 </main>
@@ -46,7 +49,7 @@
 
   needWebGL(Player)
   const player = new Player(document.getElementById('stage'), { maxPixelRatio: 1.5 })
-  const bar = document.getElementById('bar'), name = document.getElementById('name'), ul = document.getElementById('cast')
+  const bar = document.getElementById('bar'), name = document.getElementById('name'), credit = document.getElementById('credit'), ul = document.getElementById('cast')
   const buttons = new Map()
   let current = null, exprs = [], next = -1
 
@@ -76,6 +79,12 @@
     }
     if (id !== current) return  // another was picked meanwhile
     name.textContent = m.name
+    credit.replaceChildren()
+    const said = cast.find((c) => c.id === id)?.credit  // a character from other people's work
+    if (said) {
+      const more = document.createElement('a'); more.href = '../characters/CREDITS.md'; more.textContent = 'credits'
+      credit.append(`${said} · `, more)
+    }
     exprs = m.expressions; next = -1
     bar.querySelectorAll('button').forEach((b) => b.remove())
     for (const x of [{ id: null, label: 'neutral' }, ...m.expressions]) {

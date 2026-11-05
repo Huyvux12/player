@@ -15,6 +15,7 @@ const LANGS = ['en', 'zh', 'zh-Hant', 'ja']
 describe('featured characters', { skip: !ids.length && 'no characters/ here' }, () => {
   it('come with their licence, and a list of them all', () => {
     assert.ok(existsSync(join(root, 'LICENSE.md')))
+    assert.ok(existsSync(join(root, 'CREDITS.md')))
     const list = JSON.parse(readFileSync(join(root, 'index.json'), 'utf8')) as { id: string; name: string }[]
     assert.deepEqual(list.map((c) => c.id), ids)
     for (const c of list) assert.equal(c.name, JSON.parse(readFileSync(join(root, c.id, 'model.json'), 'utf8')).name)
@@ -27,7 +28,7 @@ describe('featured characters', { skip: !ids.length && 'no characters/ here' }, 
       assert.equal(raw.format, FORMAT)
       assert.ok(raw.version <= FORMAT_VERSION)
       assert.deepEqual(raw.requires ?? [], [])
-      assert.equal(raw.meta?.license?.id, 'LicenseRef-LivLiv-Samples')
+      assert.equal(raw.meta?.license?.id, { p01: 'CC-BY-NC-SA-4.0', p02: 'CC-BY-NC-SA-4.0', p03: 'LicenseRef-Third-Party-Character' }[id] ?? 'LicenseRef-LivLiv-Samples')
       assert.equal(raw.meta?.watermark?.kind, 'livliv')  // the LivLiv logo, in the corner only (owner 11-04)
       assert.equal(raw.meta?.watermark?.center, false)
       for (const e of raw.expressions || []) assert.deepEqual(LANGS.filter((l) => !e.label?.[l]), [], `${e.id}'s names`)

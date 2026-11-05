@@ -15,4 +15,4 @@ npm run check && npm test && npm run build && npm run test:browser
 
 Contributions are under the Apache License 2.0, like the rest of the code (section 5 of the licence).
 
-The featured characters in `characters/` are LivLiv's and take no changes; see their [licence](characters/LICENSE.md).
+The featured characters in `characters/` take no changes; see their [licence](characters/LICENSE.md) and [credits](characters/CREDITS.md).

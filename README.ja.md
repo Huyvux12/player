@@ -71,7 +71,9 @@ API の全体は [API.md](API.md)（英語）にあります：オプション�
 
 ## 厳選キャラクター
 
-`characters/` には LivLiv が制作した 21 体のキャラクターが入っていて、そのまま `load()` できます。右下に小さな LivLiv のマークが入っていて、プレイヤーがそれを描きます。これらには Apache License は**適用されません**。個人の非商用利用は、クレジット（「キャラクター：LivLiv（livliv.ai）」）を入れれば無料です。販売、商用利用、AI モデルの学習には使えません。Nana は LivLiv のマスコットです。条文は [characters/LICENSE.md](characters/LICENSE.md) をご覧ください。
+`characters/` には 21 体のキャラクターが入っていて、そのまま `load()` できます。右下に小さな LivLiv のマークが入っていて、プレイヤーがそれを描きます。これらには Apache License は**適用されません**。大半は LivLiv が制作したもので、個人の非商用利用は、クレジット（「キャラクター：LivLiv（livliv.ai）」）を入れれば無料です。販売、商用利用、AI モデルの学習には使えません。Nana は LivLiv のマスコットです。条文は [characters/LICENSE.md](characters/LICENSE.md) をご覧ください。
+
+Kujira、Kujira Q、Pen は他の方の作品に基づくもので、上記のライセンスとクレジットは適用されません。出典、クレジット、条件は [characters/CREDITS.md](characters/CREDITS.md) をご覧ください。
 
 キャラクターの一覧は[英語の README](README.md#featured-characters) にあります。
 
@@ -89,7 +91,7 @@ LivLiv Player と `.livliv` 形式は LivLiv が独自に開発したもので�
 
 livliv.ai でのキャラクター制作には AI を使います。プレイヤー自体は再生するだけです。AI のサービスを呼び出すことはなく、指定されたファイルだけを読み込みます。フェイストラッキングはブラウザ内で Google の MediaPipe を動かし、カメラの映像は端末の外に出ません。通信について詳しくは API.md をご覧ください。
 
-このリポジトリの厳選キャラクターも LivLiv で作ったもので、同じく AI を使っています。Nana のリファイン版（`d03ft`）には、LivLiv 独自のツールで揺れるパーツと振り向きのキーフォームを加えています。
+このリポジトリの厳選キャラクターも LivLiv で作ったもので、同じく AI を使っています。Kujira、Kujira Q、Pen は他の方のキャラクターを翻案したものです（[クレジット](characters/CREDITS.md)）。Nana のリファイン版（`d03ft`）には、LivLiv 独自のツールで揺れるパーツと振り向きのキーフォームを加えています。
 
 パッケージの `meta.author` と `meta.license` は、クレジットと利用条件を記したものです。残したうえで従ってください。LivLiv で作ったキャラクターを公開するときは AI が制作に関わっていることを明記し、手描きや手作業のリギングによる作品として紹介しないでください。
 
