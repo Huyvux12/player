@@ -73,7 +73,7 @@ API の全体は [API.md](API.md)（英語）にあります：オプション�
 
 `characters/` には 21 体のキャラクターが入っていて、そのまま `load()` できます。右下に小さな LivLiv のマークが入っていて、プレイヤーがそれを描きます。これらには Apache License は**適用されません**。大半は LivLiv が制作したもので、個人の非商用利用は、クレジット（「キャラクター：LivLiv（livliv.ai）」）を入れれば無料です。販売、商用利用、AI モデルの学習には使えません。Nana は LivLiv のマスコットです。条文は [characters/LICENSE.md](characters/LICENSE.md) をご覧ください。
 
-Kujira、Kujira Q、Pen は他の方の作品に基づくもので、上記のライセンスとクレジットは適用されません。出典、クレジット、条件は [characters/CREDITS.md](characters/CREDITS.md) をご覧ください。この 3 体の元になったキャラクターの作者である上善无形さん、ZipZipPipe さん、贱兔死顺盖さんに感謝します。
+Kujira、Kujira Q、Pen は他の方の作品に基づくもので、上記のライセンスとクレジットは適用されません。出典、クレジット、条件は [characters/CREDITS.md](characters/CREDITS.md) をご覧ください。
 
 キャラクターの一覧は[英語の README](README.md#featured-characters) にあります。
 
@@ -125,3 +125,7 @@ WebGL2 と ES2023 が必要です：Chrome / Edge 97+、Firefox 104+、Safari 15
 ## ライセンス
 
 コードは [Apache License 2.0](LICENSE) です（[NOTICE](NOTICE) も参照）。厳選キャラクターには別のライセンス [characters/LICENSE.md](characters/LICENSE.md) があります。どちらのライセンスも LivLiv の名称とロゴには及びません。
+
+## 謝辞
+
+Kujira、Kujira Q、Pen の元になったキャラクターの作者である上善无形さん、ZipZipPipe さん、贱兔死顺盖さんに感謝します。詳しくは [characters/CREDITS.md](characters/CREDITS.md) をご覧ください。
