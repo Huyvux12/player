@@ -2,6 +2,8 @@
 
 大部分精选角色由 LivLiv 团队借助 AI 制作。有三个来自别人的作品。
 
+感谢上善无形、ZipZipPipe 和贱兔死顺盖，这三个角色基于他们的角色。这只是致谢，不代表他们看过或同意过这些模型。
+
 ## Kujira（p01）、Kujira Q（p02）
 
 基于社区角色「鲸鱼娘」：
@@ -24,6 +26,8 @@ Apache 许可和 LivLiv 精选角色许可都不适用于 Pen。LivLiv 对这个
 # Character credits
 
 Most featured characters were made by the LivLiv team with AI. Three come from other people's work.
+
+Thanks to 上善无形, ZipZipPipe and 贱兔死顺盖, whose characters these three are based on. This is thanks only: it doesn't mean they have seen or approved these models.
 
 ## Kujira (p01), Kujira Q (p02)
 

@@ -81,7 +81,8 @@ the player draws. They are **not** covered by the Apache License. Most were made
 LivLiv's mascot. The terms are in [characters/LICENSE.md](characters/LICENSE.md).
 
 Kujira, Kujira Q and Pen come from other people's work: that licence and that credit don't cover them. Their sources,
-credits and terms are in [characters/CREDITS.md](characters/CREDITS.md).
+credits and terms are in [characters/CREDITS.md](characters/CREDITS.md). Thanks to 上善无形, ZipZipPipe and 贱兔死顺盖, whose
+characters these three are based on.
 
 | id | name | id | name | id | name |
 |---|---|---|---|---|---|
