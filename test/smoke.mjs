@@ -36,7 +36,22 @@ function bombPng(side = 9000) {
     chunk('IDAT', deflateSync(Buffer.alloc(side * (side + 1)))), chunk('IEND', Buffer.alloc(0))])
 }
 const bomb = bombPng()
+/** requests per route of runDropped */
+const dropped = {}
 const server = createServer((req, res) => {
+  const drop = req.url.match(/^\/__dropped\/(once|always|missing)\/(.+)\.livliv$/)
+  if (drop) {
+    const [, how, id] = drop, n = (dropped[how] = (dropped[how] || 0) + 1)
+    if (how === 'missing') { res.writeHead(404).end(); return }
+    const b = readFileSync(join(chars, `${id}.livliv`))
+    if (how === 'always' || n === 1) {  // half of the file, then the connection goes
+      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': b.length })
+      res.write(b.subarray(0, b.length >> 1), () => res.destroy())
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': b.length }).end(b)
+    return
+  }
   if (req.url === '/__tiny.vrm') { res.writeHead(200, { 'content-type': 'model/gltf-binary' }).end(vrm); return }
   if (req.url === '/__bomb.png') { res.writeHead(200, { 'content-type': 'image/png' }).end(bomb); return }
   const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
@@ -89,6 +104,13 @@ try {
   const kfOk = hostile.keyforms.loaded && hostile.keyforms.share > 0.05
   if (!kfOk) failed++
   console.log(`${kfOk ? 'ok  ' : 'FAIL'} broken keyforms: ${hostile.keyforms.refused ?? `${hostile.keyforms.name} plays on the rig alone`}`)
+
+  // a package whose connection drops (see runDropped)
+  const drops = await page.evaluate((id) => window.runDropped(id), ids[0])
+  const dropsOk = /^played/.test(drops.once) && dropped.once === 2 && /could not load/.test(drops.always) && !/Failed to fetch/.test(drops.always) && dropped.always === 2
+    && /HTTP 404/.test(drops.missing) && dropped.missing === 1
+  if (!dropsOk) failed++
+  console.log(`${dropsOk ? 'ok  ' : 'FAIL'} a package's connection drops: once "${drops.once}" (${dropped.once} requests), always "${drops.always.slice(0, 60)}…" (${dropped.always}), a 404 "${drops.missing.slice(0, 50)}…" (${dropped.missing})`)
 
   // disposing while something runs (see runLifecycle)
   const life = await page.evaluate((id) => window.runLifecycle(id), ids[0])

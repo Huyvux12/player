@@ -352,11 +352,21 @@ function explain(e: unknown, where: string): Error {
   return new Error(msg.startsWith('LivLiv') ? msg : `LivLiv: ${msg}`)
 }
 
-/** a .livliv package from a URL, as a Blob */
+/** a .livliv package from a URL, as a Blob. One file is one connection to lose where a folder has dozens, and a dropped one
+ *  breaks in the body as often as at the start: tried once more, unless the server said no (4xx). What the page gets is
+ *  our words, never the browser's ("Failed to fetch", "Load failed") */
 async function fetchPackage(url: string): Promise<Blob> {
-  const r = await fetch(url).catch((e) => { throw explain(e, url) })
-  if (!r.ok) throw explain(Object.assign(new Error(`HTTP ${r.status}`), { status: r.status }), url)
-  return r.blob()
+  for (let again = true; ; again = false) {
+    try {
+      const r = await fetch(url)
+      if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status })
+      return await r.blob()
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      if (status && status < 500) throw explain(e, url)
+      if (!again) throw status ? explain(e, url) : new Error(`LivLiv: could not load ${url}: unreachable or the connection dropped, or on another origin that sends no CORS header`)
+    }
+  }
 }
 
 /** a model from files: model.json (the shallowest one) and its images by their paths relative to it, and its keyforms

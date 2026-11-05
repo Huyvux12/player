@@ -28,15 +28,9 @@
   </div>
   <ul class="cast" id="cast"></ul>
 </main>
-<script>
-  // the first character's package starts downloading before the script below
-  const first = new URLSearchParams(location.search).get('id')
-  document.head.append(Object.assign(document.createElement('link'), { rel: 'preload', as: 'fetch', crossOrigin: 'anonymous',
-    href: `../characters/${first && /^[\w-]+$/.test(first) ? first : 'd03ft'}.livliv` }))
-</script>
 <script type="module">
   import { Player } from '../dist/index.js'
-  import { loading, needWebGL } from './loading.js'
+  import { loadWithFallback, loading, needWebGL } from './loading.js'
 
   // All the featured characters: one plays on the stage (one player, one WebGL context), the rest wait as their
   // pictures; a click on one puts it on the stage. ?id=<id> starts with that one (else Refined Nana); ?demo=1 plays expressions and
@@ -72,7 +66,7 @@
     const done = loading(document.getElementById('view'), `../characters/${id}/avatar.webp`)
     let m
     try {
-      m = await player.load(`../characters/${id}.livliv`).finally(done)
+      m = await loadWithFallback(player, `../characters/${id}.livliv`).finally(done)
     } catch (e) {  // the one on the stage stays; a click can try this one again
       if (id === current) { current = before; press(before); name.textContent = e.message }
       return

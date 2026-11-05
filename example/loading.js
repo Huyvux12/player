@@ -25,3 +25,13 @@ export function needWebGL(Player) {
   document.body.append(note)
   throw new Error('no WebGL2')
 }
+
+/** Loads a model, with a featured character's folder as the second chance when its package (one big file) does not come. */
+export async function loadWithFallback(player, source) {
+  try {
+    return await player.load(source)
+  } catch (e) {
+    if (typeof source !== 'string' || !source.endsWith('.livliv')) throw e
+    return player.load(source.replace(/\.livliv$/, '/')).catch(() => { throw e })
+  }
+}

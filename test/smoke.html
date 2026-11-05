@@ -158,10 +158,10 @@
       const { createTexture, deleteTexture } = gl
       gl.createTexture = function () { made++; return createTexture.call(gl) }
       gl.deleteTexture = function (t) { if (t) freed++; return deleteTexture.call(gl, t) }
-      const load = p.load(`../characters/${id}/`).then(() => 'resolved', (e) => e.message)
-      await new Promise((r) => setTimeout(r, 5))
-      p.dispose()
-      out.load = await load
+      // disposed just as the images start coming in (a timer could lose the race to a quick load)
+      const loadModel = p.puppet.loadModel.bind(p.puppet)
+      p.puppet.loadModel = (...args) => { p.dispose(); return loadModel(...args) }
+      out.load = await p.load(`../characters/${id}/`).then(() => 'resolved', (e) => e.message)
       p.resize()
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
       const px = new Uint8Array(4)
@@ -189,6 +189,16 @@
       out.mic = stream.getTracks()[0].readyState
     }
     c.remove()
+    return out
+  }
+
+  /** a package's connection dropping (the flaky routes of smoke.mjs): once, it is tried again and plays; always, the page
+   *  gets our words, not the browser's; a 404 is not tried again */
+  window.runDropped = async (id) => {
+    const p = new Player(canvas, { autoplay: false, followPointer: false })
+    const tell = (route) => p.load(route).then((m) => `played ${m.name}`, (e) => e.message)
+    const out = { once: await tell(`/__dropped/once/${id}.livliv`), always: await tell(`/__dropped/always/${id}.livliv`), missing: await tell('/__dropped/missing/x.livliv') }
+    p.dispose()
     return out
   }
 

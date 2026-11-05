@@ -6,15 +6,15 @@
 <style>html, body { margin: 0; height: 100%; background: #20222b } canvas { display: block; width: 100%; height: 100% }</style>
 <canvas id="stage"></canvas>
 <p id="wait" style="position:fixed;inset:45% 0 auto;margin:0;color:#eef;font:14px system-ui,sans-serif;text-align:center">Loading…</p>
-<link rel="preload" as="fetch" crossorigin href="../characters/d03ft.livliv">
 <script type="module">
   import { Player } from '../dist/index.js'
+  import { loadWithFallback } from './loading.js'
 
   // a featured character; your own export works the same
   const wait = document.getElementById('wait')
   if (!Player.isSupported()) { wait.textContent = 'This browser has no WebGL2'; throw new Error('no WebGL2') }
   const player = new Player(document.getElementById('stage'))
-  const model = await player.load('../characters/d03ft.livliv').catch((e) => { wait.textContent = e.message; throw e })
+  const model = await loadWithFallback(player, '../characters/d03ft.livliv').catch((e) => { wait.textContent = e.message; throw e })
   wait.remove()
 
   // each click shows the next expression, then neutral again
