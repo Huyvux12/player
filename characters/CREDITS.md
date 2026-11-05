@@ -9,7 +9,7 @@
 - 原创角色溟月，作者上善无形：https://www.bilibili.com/opus/1231977657712771073
 - 女仆设计，作者 ZipZipPipe：https://www.bilibili.com/video/BV1tE9XBbErS/
 
-这两个文件夹采用 CC BY-NC-SA 4.0（https://creativecommons.org/licenses/by-nc-sa/4.0/），不适用于 LivLiv 精选角色许可。LivLiv 借助 AI，根据两张现成的图片把它们做成分层、绑定的模型。
+这两个文件夹采用 CC BY-NC-SA 4.0（https://creativecommons.org/licenses/by-nc-sa/4.0/), 不适用于 LivLiv 精选角色许可。LivLiv 借助 AI，根据两张现成的图片把它们做成分层、绑定的模型。
 
 署名：「Kujira：上善无形、ZipZipPipe（CC BY-NC-SA 4.0）；模型：LivLiv」。这是非官方的社区角色，与 DeepSeek 无关。
 
