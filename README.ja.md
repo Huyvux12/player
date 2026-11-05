@@ -1,0 +1,127 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="media/livliv-player-wordmark-white.svg">
+    <img alt="LivLiv Player" src="media/livliv-player-wordmark-2000.png" width="360">
+  </picture>
+</p>
+
+<p align="center">
+  超軽量の Web 向けキャラクタープレイヤー。リップシンクと Web カメラのフェイストラッキングに対応し、数行のコードでページや配信画面、アプリに組み込めます。<br>
+  さまざまなスタイルの厳選キャラクター 21 体を同梱。すぐに使えます。
+</p>
+
+<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <b>日本語</b></p>
+
+<!-- デモ GIF（プレースホルダー）。media/demo.gif（720 × 450 前後、5 MB 以内）を置いてから、コメントを外してください：
+<p align="center"><img src="media/demo.gif" alt="厳選キャラクターが呼吸し、まばたきし、振り向き、話す様子" width="720"></p>
+-->
+
+- WebGL2、依存なし、コアは gzip で約 34 KB
+- リップシンク（マイク、音声、動画）と Web カメラのフェイストラッキング（MediaPipe）はブラウザ内で動作し、必要なときだけ読み込めます
+- LivLiv・VRM・PNGTuber のキャラクターを同じ API で再生
+- [`characters/`](characters/) に厳選キャラクター 21 体。すぐに使えます
+
+## 試してみる
+
+- **オンラインで**：デモページは [livliv-dev.github.io/player](https://livliv-dev.github.io/player/) にあります。
+- **手元で**：`npm install && npm run build` のあと、このフォルダを静的サーバーで配信して `/example/demo.html` を開きます
+  （表情、アクション、マイク、カメラ。`?model=../characters/<id>/` でキャラクターを切り替え）。`/example/png.html` と
+  `/example/vrm.html` は PNGTuber と VRM です。
+- **livliv.ai で**：各キャラクターのページで、同じレンダラーがそのキャラクターを動かしています。[livliv.ai/discover](https://livliv.ai/discover) からどうぞ。
+
+## 自分のページで使う
+
+```js
+import { Player } from '@livliv/player'
+
+const player = new Player(document.querySelector('canvas'))
+await player.load('characters/k01/')   // model.json と textures/ のあるフォルダ、または .livliv ファイル
+
+player.setExpression('smile')          // 使える id は player.expressions に
+player.act('nod')
+player.params.mouthOpen = 0.6          // 0..1
+```
+
+リップシンクとフェイストラッキング：
+
+```js
+import { createSpeech } from '@livliv/player/voice'
+import { startFaceTracking } from '@livliv/player/tracking'   // @mediapipe/tasks-vision が必要
+
+const speech = createSpeech(player)
+button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
+
+await startFaceTracking(player)
+```
+
+VRM や PNGTuber も同じ API で：
+
+```js
+import { BodyPlayer } from '@livliv/player/body'
+import { VrmBody } from '@livliv/player/vrm'    // three と @pixiv/three-vrm が必要
+import { PngBody } from '@livliv/player/png'
+
+const vrm = new BodyPlayer(canvasA, new VrmBody())
+await vrm.load('/avatars/me.vrm')
+const png = new BodyPlayer(canvasB, new PngBody())
+await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
+```
+
+API の全体は [API.md](API.md)（英語）にあります：オプション、パラメーター、表情とアクション、ドライバー、VRM と PNGTuber、信頼できないファイルの上限、モデルパッケージ、フォーマットのバージョン。LivLiv のパッケージ形式（`.livliv`、`model.json` v4）は [FORMAT.md](FORMAT.md)、JSON Schema は [`schema/`](schema/) にあります。v4 より前に書き出したパッケージは [FORMAT-v3.md](FORMAT-v3.md) のとおりで、そのまま再生できます。
+
+> まだ npm には公開していません。このリポジトリからビルドして `dist/index.js` をインポートしてください。
+
+## 厳選キャラクター
+
+`characters/` には LivLiv が制作した 21 体のキャラクターが入っていて、そのまま `load()` できます。右下に小さな LivLiv のマークが入っていて、プレイヤーがそれを描きます。これらには Apache License は**適用されません**。個人の非商用利用は、クレジット（「キャラクター：LivLiv（livliv.ai）」）を入れれば無料です。販売、商用利用、AI モデルの学習には使えません。Nana は LivLiv のマスコットです。条文は [characters/LICENSE.md](characters/LICENSE.md) をご覧ください。
+
+キャラクターの一覧は[英語の README](README.md#featured-characters) にあります。
+
+## 自分のキャラクター
+
+PNGTuber の画像や VRM（three.js で描画）を読み込めます。[livliv.ai](https://livliv.ai) で 1 枚の絵から自分のキャラクターを作ることもできます。
+
+- **PNGTuber**：2 枚の画像（口を閉じた絵、開いた絵）。目を閉じた 2 枚もあればなお良いです。
+- **VRM**：VRoid Studio など、VRM 0.x / 1.0 を書き出せるツールで作ったもの。
+- **LivLiv のモデル**：[livliv.ai](https://livliv.ai) で 1 枚の絵からキャラクターを作り、キャラクターページから**モデルパッケージ**（`.livliv` ファイル）をダウンロードします。そのまま `load()` に渡せます（URL、または選んでもらった `File`）。展開したフォルダでも構いません。無料プランのパッケージには LivLiv のマークが入っていて、プレイヤーがそれを描きます。
+
+## プレイヤーとキャラクターについて
+
+LivLiv Player と `.livliv` 形式は LivLiv が独自に開発したもので、Live2D のソフトウェアや Cubism SDK は使っておらず、`.moc3` / `.cmo3` ファイルも読み込みません。「Live2D」は Live2D Inc. の商標であり、LivLiv は同社と提携していません。
+
+livliv.ai でのキャラクター制作には AI を使います。プレイヤー自体は再生するだけです。AI のサービスを呼び出すことはなく、指定されたファイルだけを読み込みます。フェイストラッキングはブラウザ内で Google の MediaPipe を動かし、カメラの映像は端末の外に出ません。通信について詳しくは API.md をご覧ください。
+
+このリポジトリの厳選キャラクターも LivLiv で作ったもので、同じく AI を使っています。Nana のリファイン版（`d03ft`）には、LivLiv 独自のツールで揺れるパーツと振り向きのキーフォームを加えています。
+
+パッケージの `meta.author` と `meta.license` は、クレジットと利用条件を記したものです。残したうえで従ってください。LivLiv で作ったキャラクターを公開するときは AI が制作に関わっていることを明記し、手描きや手作業のリギングによる作品として紹介しないでください。
+
+## コードを書かずに埋め込む
+
+```html
+<iframe src="https://livliv.ai/live/k01" width="480" height="640" allow="camera; microphone"
+  style="border:0;background:transparent"></iframe>
+```
+
+同じ `/live/<id>` ページは背景が透明なので、そのまま OBS のブラウザソースに使えます。
+
+## 開発
+
+```sh
+git clone https://github.com/livliv-dev/player
+cd player
+npm install
+npm run check          # 型チェック
+npm run build          # dist/：index.js、tracking.js、voice.js、body.js、png.js、vrm.js（ES モジュール）、chunks/ と types/
+npm test               # ユニットテストとファジング（Node 22.18 以降、ブラウザ不要）
+npm run test:browser   # ヘッドレス Chromium で全キャラクターを描画。最初に一度 npx playwright-core install chromium-headless-shell
+```
+
+`src/runtime/` は livliv.ai 自身が使っているレンダラーとモーションのコードで、このリポジトリはそこから公開しています。[CONTRIBUTING.md](CONTRIBUTING.md) もご覧ください。セキュリティの問題は [SECURITY.md](SECURITY.md) のとおりにご報告ください。
+
+## 対応ブラウザ
+
+WebGL2 と ES2023 が必要です：Chrome / Edge 97+、Firefox 104+、Safari 15.4+（デスクトップ、モバイルとも）。
+
+## ライセンス
+
+コードは [Apache License 2.0](LICENSE) です（[NOTICE](NOTICE) も参照）。厳選キャラクターには別のライセンス [characters/LICENSE.md](characters/LICENSE.md) があります。どちらのライセンスも LivLiv の名称とロゴには及びません。

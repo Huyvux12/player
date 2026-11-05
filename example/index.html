@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivLiv Player: minimal</title>
+<style>html, body { margin: 0; height: 100%; background: #20222b } canvas { display: block; width: 100%; height: 100% }</style>
+<canvas id="stage"></canvas>
+<script type="module">
+  import { Player } from '../dist/index.js'
+
+  // a featured character; your own export works the same
+  const player = new Player(document.getElementById('stage'))
+  const model = await player.load('../characters/k01/')
+
+  // each click shows the next expression, then neutral again
+  let i = -1
+  addEventListener('click', () => {
+    i = i + 1 < model.expressions.length ? i + 1 : -1
+    player.setExpression(model.expressions[i]?.id ?? null)
+  })
+</script>
+</html>

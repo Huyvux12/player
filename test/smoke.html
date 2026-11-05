@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Player smoke test</title>
+<canvas id="c" style="width: 320px; height: 400px"></canvas>
+<script type="module">
+  // Run by smoke.mjs against the built package (dist/): every featured character loads, draws, takes each expression
+  // and action without a WebGL error, and shows its mark; one loads from files instead of a URL, and again as the v3
+  // package of the same model (it must draw the same pixels); a model of a newer format is refused.
+  import { FORMAT_VERSION, LEGACY_FORMAT, Player } from '../dist/index.js'
+
+  const canvas = document.getElementById('c')
+  const g = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+
+  /** the canvas's pixels now */
+  function pixels() {
+    g.canvas.width = canvas.width; g.canvas.height = canvas.height
+    g.clearRect(0, 0, canvas.width, canvas.height)
+    g.drawImage(canvas, 0, 0)
+    return g.getImageData(0, 0, canvas.width, canvas.height).data
+  }
+
+  /** share of the canvas the character covers (alpha above 0) */
+  function covered() {
+    const d = pixels()
+    let n = 0
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++
+    return n / (d.length / 4)
+  }
+
+  /** share of the pixels two frames differ in; outside: only those outside the bottom-right quarter */
+  function changed(a, b, outside = false) {
+    const w = canvas.width, h = canvas.height
+    let n = 0
+    for (let i = 0; i < a.length; i += 4) {
+      const p = i >> 2, x = p % w, y = (p - x) / w
+      if (outside && x >= w / 2 && y >= h / 2) continue
+      if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]), Math.abs(a[i + 3] - b[i + 3])) > 8) n++
+    }
+    return n / (a.length / 4)
+  }
+
+  let FILES = {}
+  /** a model as files (path -> Blob) under a folder, as a folder picked in the browser gives them: its model.json as
+   *  given, everything else as the folder has it */
+  async function filesOf(id, model, swap = {}) {
+    const files = new Map([[`${id}/model.json`, typeof model === 'string' ? new Blob([model]) : new Blob([JSON.stringify(model)])]])
+    for (const f of FILES[id]) if (f !== 'model.json') files.set(`${id}/${f}`, swap[f] ?? await (await fetch(`../characters/${id}/${f}`)).blob())
+    for (const [f, b] of Object.entries(swap)) files.set(`${id}/${f}`, b)
+    return files
+  }
+  const json = async (id) => (await fetch(`../characters/${id}/model.json`)).json()
+  /** the same model with its mark turned off */
+  const bare = (m) => (m.meta ? { ...m, meta: { ...m.meta, watermark: { kind: 'none' } } } : { ...m, watermark: null })
+
+  /** one frame of a model by a fresh, still player (no idle motion): the same pixels every time but for the mark; and
+   *  the model as the player drew it */
+  async function still(source) {
+    const p = new Player(canvas, { autoplay: false, followPointer: false, idle: false })
+    const info = await p.load(source)
+    p.resize()
+    const d = pixels(), drawn = JSON.parse(JSON.stringify(p.puppet.model))
+    p.dispose()
+    return { d, info, drawn }
+  }
+
+  /** what the model's mark changes in a still frame (drawn as it comes, and with the mark off), how much of that lies
+   *  outside the bottom-right quarter (the corner mark alone: none), and what two frames without it differ in (should be
+   *  nothing: else the first number says nothing about the mark) */
+  async function markShare(id) {
+    const m = await json(id)
+    const a = await still(`../characters/${id}/`), b = await still(await filesOf(id, bare(m))), c = await still(await filesOf(id, bare(m)))
+    return { mark: changed(a.d, b.d), outside: changed(a.d, b.d, true), noise: changed(b.d, c.d) }
+  }
+
+  window.run = async ({ ids, files }) => {
+    FILES = files
+    const player = new Player(canvas, { autoplay: false, followPointer: false, lang: 'en' })
+    const gl = player.puppet.gl
+    const out = []
+    for (const id of ids) {
+      const t0 = performance.now()
+      try {
+        const m = await player.load(`../characters/${id}/`)
+        const ms = Math.round(performance.now() - t0)
+        player.resize()
+        const share = covered()
+        for (const e of m.expressions) { player.setExpression(e.id); player.resize() }
+        player.setExpression(null)
+        for (const a of ['nod', 'shake', 'tilt', 'hop', 'shy']) player.act(a)
+        player.params.mouthOpen = 1
+        player.resize()
+        player.params.mouthOpen = 0
+        out.push({ id, name: m.name, format: `${m.format} ${m.version}`, ms, share: Math.round(share * 1000) / 1000,
+          expressions: m.expressions.map((e) => e.label).join(' / '), glError: gl.getError(), watermark: m.watermark,
+          license: m.meta?.license?.id ?? null })
+      } catch (e) {
+        out.push({ id, error: String(e.message || e) })
+      }
+    }
+
+    // from files: the same model as a Map of path -> Blob
+    const id = ids[0], model = await json(id)
+    let fromFiles
+    try {
+      const m = await player.load(await filesOf(id, model))
+      player.resize()
+      fromFiles = { name: m.name, share: Math.round(covered() * 1000) / 1000 }
+    } catch (e) {
+      fromFiles = { error: String(e.message || e) }
+    }
+
+    // a newer format: refused, and the model before stays
+    let newer
+    try {
+      await player.load(new Map([['model.json', new Blob([JSON.stringify({ ...model, version: FORMAT_VERSION + 1 })])]]))
+      newer = { error: 'loaded' }
+    } catch (e) {
+      newer = { message: String(e.message || e), kept: player.model?.name }
+    }
+    player.dispose()
+
+    // the mark: what it changes in a still frame of each (a fresh player each time, on the same canvas)
+    for (const r of out) if (!r.error) Object.assign(r, await markShare(r.id))
+
+    // a package from before v4: the model as the player draws it, written as v3, must draw the same pixels (both
+    // without the mark: v3 cannot ask for the corner one alone, which the featured characters do)
+    let legacy
+    try {
+      const v4 = await still(await filesOf(id, bare(model)))
+      const { meta, files: _, ...v3 } = { ...v4.drawn, format: LEGACY_FORMAT, version: 3, watermark: null }
+      const old = await still(await filesOf(id, v3))
+      legacy = { format: `${old.info.format} ${old.info.version}`, watermark: old.info.watermark, changed: changed(v4.d, old.d) }
+    } catch (e) {
+      legacy = { error: String(e.message || e) }
+    }
+    return { out, fromFiles, newer, legacy }
+  }
+
+  /** hostile packages: each must be refused (or, for broken keyforms, played on the rig alone), the model before kept */
+  window.runHostile = async (id, kfId) => {
+    const player = new Player(canvas, { autoplay: false, followPointer: false })
+    const m = await json(id), first = m.layers[0], tex = first.texture
+    await player.load(`../characters/${id}/`)
+    const bomb = await (await fetch('/__bomb.png')).blob()
+    const cases = {
+      bomb: filesOf(id, m, { [tex]: bomb }),
+      path: filesOf(id, { ...m, layers: [{ ...first, texture: 'textures/../../package.json' }, ...m.layers.slice(1)] }),
+      canvas: filesOf(id, { ...m, canvas: [100000, 100] }),
+      box: filesOf(id, { ...m, layers: [{ ...first, w: 1e9 }, ...m.layers.slice(1)] }),
+      json: filesOf(id, '{ "format": "livliv-model", '),
+      layers: filesOf(id, { ...m, layers: Array.from({ length: 600 }, () => first) }),
+    }
+    const out = {}
+    for (const [k, files] of Object.entries(cases)) {
+      try { await player.load(await files); out[k] = { loaded: true } } catch (e) { out[k] = { refused: String(e.message || e), kept: player.model?.name } }
+    }
+    // keyforms that are not right: the character still plays, on the rig alone
+    const kf = await json(kfId)
+    try {
+      const bad = new Blob([JSON.stringify({ version: 1, cols: 65, rows: 97, cell: 16, units: 0.1, turn: 0.8, nod: 1, keys: [{ param: 'angleX', value: 30, fields: { head: 'AAAA' } }] })])
+      const info = await player.load(await filesOf(kfId, kf, { [kf.files.keyforms]: bad }))
+      player.resize()
+      out.keyforms = { loaded: true, name: info.name, share: covered() }
+    } catch (e) { out.keyforms = { refused: String(e.message || e) } }
+    player.dispose()
+    return out
+  }
+</script>
+</html>

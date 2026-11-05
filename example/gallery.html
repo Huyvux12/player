@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivLiv Player: featured characters</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: #f4f2ef; font: 14px system-ui, sans-serif; color: #222 }
+  main { max-width: 900px; margin: 0 auto; padding: 16px }
+  .stage { background: #fff; border-radius: 16px; overflow: hidden }
+  canvas { display: block; width: 100%; height: min(70vh, 640px); cursor: pointer }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px }
+  .bar b { margin-right: auto; font-size: 15px }
+  .bar button { font: inherit; padding: 5px 10px; border: 0; border-radius: 8px; background: #eee; cursor: pointer }
+  .cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 8px; margin-top: 12px; padding: 0; list-style: none }
+  .cast button { width: 100%; padding: 4px; border: 2px solid transparent; border-radius: 12px; background: #fff; cursor: pointer }
+  .cast button[aria-pressed="true"] { border-color: #6a4fe6 }
+  .cast img { display: block; width: 100%; aspect-ratio: 1; border-radius: 8px }
+  .cast span { display: block; overflow: hidden; margin-top: 2px; color: #666; font-size: 11px; white-space: nowrap; text-overflow: ellipsis }
+</style>
+<main>
+  <div class="stage">
+    <canvas id="stage"></canvas>
+    <div class="bar" id="bar"><b id="name"></b></div>
+  </div>
+  <ul class="cast" id="cast"></ul>
+</main>
+<script type="module">
+  import { Player } from '../dist/index.js'
+
+  // All the featured characters: one plays on the stage (one player, one WebGL context), the rest wait as their
+  // pictures; a click on one puts it on the stage. ?id=<id> starts with that one; ?demo=1 plays expressions and
+  // actions by itself and moves to the next character now and then (for recording the README's GIF)
+  const FIRST = ['p01', 'p02', 'd03', 'd03ft', 'p03', 'k01', 'k02', 's01', 'v07']
+  const q = new URLSearchParams(location.search), demo = q.get('demo') === '1'
+  const list = await (await fetch('../characters/index.json')).json()
+  const rank = (id) => (FIRST.includes(id) ? FIRST.indexOf(id) : FIRST.length)
+  const cast = list.sort((a, b) => rank(a.id) - rank(b.id))  // the rest keep the list's order
+
+  const player = new Player(document.getElementById('stage'), { maxPixelRatio: 1.5 })
+  const bar = document.getElementById('bar'), name = document.getElementById('name'), ul = document.getElementById('cast')
+  const buttons = new Map()
+  let current = null, exprs = [], next = -1
+
+  for (const c of cast) {
+    const li = document.createElement('li'), b = document.createElement('button'), img = document.createElement('img'), label = document.createElement('span')
+    img.src = `../characters/${c.id}/avatar.webp`; img.alt = ''; img.loading = 'lazy'
+    // a name is its author's text: never HTML. Two of the same name (Nana and Refined Nana) are told apart by their ids
+    const twin = cast.filter((o) => o.name === c.name).length > 1
+    label.textContent = twin ? `${c.name} · ${c.id}` : c.name
+    b.append(img, label); b.title = label.textContent; b.onclick = () => show(c.id)
+    li.append(b); ul.append(li); buttons.set(c.id, b)
+  }
+
+  async function show(id) {
+    if (id === current) return
+    current = id
+    for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === id))
+    const m = await player.load(`../characters/${id}/`)
+    if (id !== current) return  // another was picked meanwhile
+    name.textContent = m.name
+    exprs = m.expressions; next = -1
+    bar.querySelectorAll('button').forEach((b) => b.remove())
+    for (const x of [{ id: null, label: 'neutral' }, ...m.expressions]) {
+      const b = document.createElement('button'); b.textContent = x.label; b.onclick = () => player.setExpression(x.id); bar.append(b)
+    }
+  }
+  // a click on the stage: the next expression, then neutral again
+  document.getElementById('stage').onclick = () => { next = next + 1 < exprs.length ? next + 1 : -1; player.setExpression(exprs[next]?.id ?? null) }
+  await show(cast.some((c) => c.id === q.get('id')) ? q.get('id') : cast[0].id)
+
+  if (demo) {
+    const acts = ['nod', 'tilt', 'shake', 'hop', 'shy']
+    let k = 0
+    setInterval(() => {
+      k++
+      if (k % 12 === 0) { const i = cast.findIndex((c) => c.id === current); show(cast[(i + 1) % cast.length].id); return }
+      if (k % 2) { next = next + 1 < exprs.length ? next + 1 : -1; player.setExpression(exprs[next]?.id ?? null) } else player.act(acts[k % acts.length])
+    }, 700)
+  }
+</script>
+</html>

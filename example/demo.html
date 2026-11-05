@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivLiv Player: demo</title>
+<!-- only face tracking needs this: where the browser finds @mediapipe/tasks-vision without a bundler -->
+<script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #20222b; color: #eef; font: 14px system-ui, sans-serif }
+  canvas { display: block; width: 100%; height: 100% }
+  .bar { position: fixed; z-index: 1; left: 12px; right: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px }
+  button, label { font: inherit; padding: 6px 11px; border: 0; border-radius: 8px; background: #ffffff1c; color: inherit; cursor: pointer }
+  button[aria-pressed="true"] { background: #ff4d5e }
+  #status { position: fixed; z-index: 1; left: 12px; bottom: 12px; margin: 0; opacity: .8 }
+</style>
+<canvas id="stage"></canvas>
+<div class="bar" id="bar"></div>
+<p id="status" role="status"></p>
+
+<script type="module">
+  import { Player } from '../dist/index.js'
+
+  const player = new Player(document.getElementById('stage'))
+  const bar = document.getElementById('bar'), status = document.getElementById('status')
+  window.player = player  // to try things in the console
+
+  const button = (text, onClick) => {
+    const b = document.createElement('button'); b.textContent = text; b.onclick = () => onClick(b); bar.append(b); return b
+  }
+
+  // a model: a featured character, ?model=<URL of a model.json or its folder>, or a folder picked below
+  async function show(source) {
+    status.textContent = 'Loading…'
+    try {
+      const m = await player.load(source)
+      status.textContent = `${m.name} · ${m.format} ${m.version} · mark: ${m.watermark ?? 'none'}${m.meta?.license ? ` · ${m.meta.license.id}` : ''}`
+      controls(m)
+    } catch (e) {
+      status.textContent = e.message
+      controls(null)
+    }
+  }
+
+  function controls(m) {
+    bar.replaceChildren()
+    const pick = document.createElement('label')
+    pick.innerHTML = 'open a folder… <input type="file" webkitdirectory hidden>'
+    pick.querySelector('input').onchange = (e) => e.target.files.length && show(e.target.files)
+    const one = document.createElement('label')  // a .livliv package (one file)
+    one.innerHTML = 'open a .livliv… <input type="file" accept=".livliv,.zip" hidden>'
+    one.querySelector('input').onchange = (e) => e.target.files.length && show(e.target.files[0])
+    bar.append(pick, one)
+    if (!m) return
+    const exprs = [{ id: null, label: 'neutral' }, ...m.expressions].map((x) => button(x.label, (b) => {
+      player.setExpression(x.id)
+      exprs.forEach((o) => o.setAttribute('aria-pressed', String(o === b)))
+    }))
+    for (const a of ['nod', 'shake', 'tilt', 'hop']) button(a, () => player.act(a))
+    let mic = null, cam = null
+    button('microphone', async (b) => {
+      if (mic) { mic.stop(); mic = null } else {
+        const { startLipSync } = await import('../dist/voice.js')
+        mic = await startLipSync(player).catch((e) => { status.textContent = e.message; return null })
+      }
+      b.setAttribute('aria-pressed', String(!!mic))
+    })
+    button('camera', async (b) => {
+      if (cam) { cam.stop(); cam = null } else {
+        const { startFaceTracking } = await import('../dist/tracking.js')
+        cam = await startFaceTracking(player, {
+          onProgress: (s) => { status.textContent = s.step === 'download' ? `Face model ${Math.round(s.progress * 100)}%` : `${s.step}…` },
+        }).catch((e) => { status.textContent = e.message; return null })
+        if (cam) status.textContent = 'Camera on'
+      }
+      b.setAttribute('aria-pressed', String(!!cam))
+    })
+  }
+
+  show(new URLSearchParams(location.search).get('model') || '../characters/k01/')
+</script>
+</html>

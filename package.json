@@ -1,0 +1,98 @@
+{
+  "name": "@livliv/player",
+  "version": "0.2.0",
+  "description": "LivLiv Player: a lightweight 2.5D character player for the web, with lip sync and webcam face tracking. Plays LivLiv, VRM and PNGTuber characters; WebGL2, no dependencies in the core.",
+  "private": true,
+  "license": "Apache-2.0",
+  "homepage": "https://livliv.ai/developers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/livliv-dev/player.git"
+  },
+  "bugs": {
+    "url": "https://github.com/livliv-dev/player/issues"
+  },
+  "keywords": [
+    "avatar",
+    "vtuber",
+    "pngtuber",
+    "vrm",
+    "character",
+    "puppet",
+    "webgl2",
+    "lip-sync",
+    "face-tracking"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "API.md",
+    "FORMAT.md",
+    "FORMAT-v3.md",
+    "schema",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/src/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tracking": {
+      "types": "./dist/types/src/tracking.d.ts",
+      "import": "./dist/tracking.js"
+    },
+    "./voice": {
+      "types": "./dist/types/src/voice.d.ts",
+      "import": "./dist/voice.js"
+    },
+    "./body": {
+      "types": "./dist/types/src/body.d.ts",
+      "import": "./dist/body.js"
+    },
+    "./png": {
+      "types": "./dist/types/src/png.d.ts",
+      "import": "./dist/png.js"
+    },
+    "./vrm": {
+      "types": "./dist/types/src/vrm.d.ts",
+      "import": "./dist/vrm.js"
+    }
+  },
+  "peerDependencies": {
+    "@mediapipe/tasks-vision": "1.1.1",
+    "@pixiv/three-vrm": "^3.5.5",
+    "three": ">=0.170.0"
+  },
+  "peerDependenciesMeta": {
+    "@mediapipe/tasks-vision": {
+      "optional": true
+    },
+    "@pixiv/three-vrm": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@mediapipe/tasks-vision": "1.1.1",
+    "@pixiv/three-vrm": "3.5.5",
+    "@types/three": "0.186.0",
+    "playwright-core": "^1.64.1",
+    "three": "0.186.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
+  },
+  "scripts": {
+    "build": "rm -rf dist && vite build && tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "test": "node --disable-warning=ExperimentalWarning --import ./test/ts.mjs --test \"test/*.test.ts\"",
+    "test:browser": "node test/smoke.mjs"
+  }
+}

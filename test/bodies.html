@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Bodies smoke test</title>
+<script type="importmap">{ "imports": {
+  "three": "/node_modules/three/build/three.module.js",
+  "three/examples/jsm/": "/node_modules/three/examples/jsm/",
+  "@pixiv/three-vrm": "/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+} }</script>
+<canvas id="png" style="width: 200px; height: 240px"></canvas>
+<canvas id="vrm" style="width: 200px; height: 300px"></canvas>
+<script type="module">
+  // Run by smoke.mjs: a PNGTuber shows the picture for each mouth / eye state, and follows the face tracker (its
+  // synthetic trace) and a speech clip; a VRM (tiny-vrm.mjs, served by smoke.mjs) loads, draws, takes its expressions
+  // and follows the face tracker.
+  import { BodyPlayer } from '../dist/body.js'
+  import { PngBody } from '../dist/png.js'
+  import { VrmBody } from '../dist/vrm.js'
+  import { createSpeech } from '../dist/voice.js'
+  import { startFaceTracking } from '../dist/tracking.js'
+
+  const g = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+  const read = (canvas) => {
+    g.canvas.width = canvas.width; g.canvas.height = canvas.height
+    g.clearRect(0, 0, canvas.width, canvas.height); g.drawImage(canvas, 0, 0)
+    return g.getImageData(0, 0, canvas.width, canvas.height)
+  }
+  const pixel = (canvas, x, y) => { const d = read(canvas); const i = 4 * (Math.round(y) * d.width + Math.round(x)); return [...d.data.slice(i, i + 3)] }
+  const covered = (canvas) => { const d = read(canvas).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n / (d.length / 4) }
+  const solid = (color) => { const c = new OffscreenCanvas(100, 120), x = c.getContext('2d'); x.fillStyle = color; x.fillRect(0, 0, 100, 120); return c.convertToBlob() }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  /** what the drivers did, seen by a driver that runs after them */
+  const watch = (player) => {
+    const seen = { tracked: false, mouth: 0, angle: 0 }
+    player.use({ order: 100, update(f) { seen.tracked ||= f.tracked; seen.mouth = Math.max(seen.mouth, f.params.mouthOpen); seen.angle = Math.max(seen.angle, Math.abs(f.params.angleX)) } })
+    return seen
+  }
+  /** a voice-like clip: 220 Hz with syllables, 16-bit mono WAV */
+  function wav(secs, sr = 24000) {
+    const n = Math.round(secs * sr), b = new DataView(new ArrayBuffer(44 + 2 * n))
+    const s = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)))
+    s(0, 'RIFF'); b.setUint32(4, 36 + 2 * n, true); s(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true)
+    b.setUint32(24, sr, true); b.setUint32(28, 2 * sr, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); s(36, 'data'); b.setUint32(40, 2 * n, true)
+    for (let i = 0; i < n; i++) { const t = i / sr; b.setInt16(44 + 2 * i, 12000 * Math.sin(2 * Math.PI * 220 * t) * (Math.sin(Math.PI * 4 * t) > 0 ? 1 : 0.05), true) }
+    return new Blob([b.buffer], { type: 'audio/wav' })
+  }
+
+  window.runBodies = async () => {
+    const out = {}
+    try {
+      const canvas = document.getElementById('png')
+      const p = new BodyPlayer(canvas, new PngBody(), { autoplay: false, idle: false })
+      const m = await p.load({ closed: await solid('#ff0000'), open: await solid('#00ff00'), blink: await solid('#0000ff'), 'blink-open': await solid('#ffff00') })
+      const at = () => { p.resize(); return pixel(canvas, canvas.width / 2, canvas.height * 0.8) }
+      const shown = { closed: at() }
+      p.params.mouthOpen = 1; shown.open = at()
+      p.params.eyeLOpen = p.params.eyeROpen = 0; shown.blinkOpen = at()
+      p.params.mouthOpen = 0; shown.blink = at()
+      p.params.eyeLOpen = p.params.eyeROpen = 1
+      const seen = watch(p)
+      p.idle = true; p.play()
+      const tracking = await startFaceTracking(p, { trace: 'synth' })
+      const speech = createSpeech(p)
+      speech.unlock(); speech.say(wav(1.2))
+      await wait(1600)
+      tracking.stop(); speech.dispose()
+      out.png = { name: m.name, format: m.format, expressions: m.expressions.map((e) => e.id), shown, ...seen }
+      p.dispose()
+    } catch (e) { out.png = { error: String(e.message || e) } }
+    try {
+      const canvas = document.getElementById('vrm')
+      const p = new BodyPlayer(canvas, new VrmBody(), { autoplay: false, lang: 'en' })
+      const m = await p.load('/__tiny.vrm')
+      p.resize()
+      const share = covered(canvas)
+      const happy = p.setExpression('happy'), smile = p.setExpression('smile'), unknown = p.setExpression('nope')
+      p.params.mouthOpen = 1; p.resize()
+      const seen = watch(p)
+      p.play()
+      const tracking = await startFaceTracking(p, { trace: 'synth' })
+      await wait(800)
+      tracking.stop()
+      const head = p.body.head()
+      out.vrm = { name: m.name, format: m.format, expressions: m.expressions.map((e) => e.label), share, happy, smile, unknown, tracked: seen.tracked,
+        head: [head.x, head.y].every(Number.isFinite) }
+      p.dispose()
+    } catch (e) { out.vrm = { error: String(e.message || e) } }
+    return out
+  }
+</script>
+</html>
