@@ -16,7 +16,7 @@
 //    the `brows` layer alone where the build gave the brows one (drawn over the bangs); that layer moves with
 //    the bangs where it lies over them
 //  - body: lags the head turn / tilt, breathes (shoulders + chest), optional chest spring
-import { LIMITS, readModel, type Labels, type ModelFiles, type ModelMeta } from './format'
+import { LIMITS, latticeCell, readModel, type Labels, type ModelFiles, type ModelMeta } from './format'
 import { PARAM_RANGES, defaultParams, smooth, type Params } from './params'
 
 export { PARAM_RANGES, defaultParams, smooth, type Params }
@@ -196,7 +196,7 @@ export const defaultTuning = (): Tuning => ({ turn: 1, nod: 1, hair: 1, blink: 1
 interface GLLayer {
   def: LayerDef
   tex: WebGLTexture; frames: WebGLTexture[]; mask?: WebGLTexture; talk?: WebGLTexture; browTex?: WebGLTexture
-  vao: WebGLVertexArrayObject; pos: WebGLBuffer; count: number
+  vao: WebGLVertexArrayObject; pos: WebGLBuffer; uvs: WebGLBuffer; tris: WebGLBuffer; count: number
   rest: Float32Array; out: Float32Array
   /** the mesh's triangles (vertex indices, the index buffer's) */
   tri: Uint32Array
@@ -511,31 +511,27 @@ export class Puppet {
       tag = (h >>> 0).toString(36)
     }
     const v = `?v=${tag}${query ? `&${query}` : ''}`
+    // alongside the images, not before them. Without it the character still plays, on the rig alone
+    const keyforms = model.keyforms ? fetch(base + model.keyforms + v).then(async (k) => {
+      const t = k.ok ? await k.text() : ''
+      return t && t.length <= LIMITS.keyforms ? JSON.parse(t) as KeyformFile : undefined
+    }).catch(() => undefined) : undefined
     // all of them in one file when the server has it: one request instead of ~30
     const pack = png || !usePack ? null : await loadPack(packUrl(baseUrl, tag))
-    let keyforms: KeyformFile | undefined
-    if (model.keyforms) {  // without it the character still plays, on the rig alone
-      const k = await fetch(base + model.keyforms + v).catch(() => null)
-      const t = k?.ok ? await k.text().catch(() => '') : ''
-      if (t && t.length <= LIMITS.keyforms) { try { keyforms = JSON.parse(t) } catch { /* plays on the rig alone */ } }
-    }
     await this.loadModel(model, (f) => { const b = pack?.get(f); return b ? loadBlob(b) : loadImage(base + f + v) }, { png, keyforms })
   }
 
   /** a model from anywhere (the SDK: files the user picked): its model.json, and each image it names by its path there */
   async loadModel(raw: ModelDef, image: (path: string) => Promise<HTMLImageElement>,
-    { png = false, keyforms }: { png?: boolean; keyforms?: KeyformFile } = {}) {
+    { png = false, keyforms: keyformsComing }: { png?: boolean; keyforms?: KeyformFile | Promise<KeyformFile | undefined> } = {}) {
     const model = readModel(raw)
-    const imgs = await Promise.all(model.layers.map(async (L) => {
+    // every image at once: a layer's second image waiting for its first cost a round trip each on a slow path
+    const [imgs, keyforms] = await Promise.all([Promise.all(model.layers.map(async (L) => {
       const load = (p: string) => image(L.webp && !png ? p.replace(/\.png$/, '.webp') : p)
-      return {
-        main: await load(L.texture),
-        frames: await Promise.all((L.frames || []).map(load)),
-        mask: L.mask ? await load(L.mask) : undefined,
-        talk: L.talk ? await load(L.talk) : undefined,
-        brows: L.brow_tex ? await load(L.brow_tex) : undefined,
-      }
-    }))
+      const [main, frames, mask, talk, brows] = await Promise.all([load(L.texture), Promise.all((L.frames || []).map(load)),
+        L.mask ? load(L.mask) : undefined, L.talk ? load(L.talk) : undefined, L.brow_tex ? load(L.brow_tex) : undefined])
+      return { main, frames, mask, talk, brows }
+    })), keyformsComing])
     // before anything reaches the GPU (an image's size is known once it loads, before it is decoded in full)
     const most = Math.min(LIMITS.texture, (this.gl?.getParameter(this.gl.MAX_TEXTURE_SIZE) as number) || LIMITS.texture)
     let texels = 0
@@ -600,8 +596,9 @@ export class Puppet {
     this.expr = {}
     this.resetMouth(); this.talkLeft = 0
     this.cutBottom = model.anchors.bottom_y >= model.canvas[1] - 4
-    for (const c of Object.values(this.chains)) for (const s of c) Object.assign(s, spring())
-    this.drive.started = false
+    // all that carries over from frame to frame starts again: nothing of the model before moves this one (and a NaN
+    // in the torso's smoothing once stayed there for good, whatever was loaded next)
+    this.resetPhysics()
     this.keys = []; this.kfPair = null
     if (keyforms && keyformsFit(keyforms)) this.prepareKeyforms(keyforms)
     else if (keyforms) console.warn('LivLiv: keyforms.json is not one this player reads; the character plays on the rig alone')
@@ -611,6 +608,19 @@ export class Puppet {
    *  springs at rest, the torso settled and the face neutral, so at the key the character stands exactly as in the clip
    *  and everything else (physics, blinks, mouth, brows, roll) keeps moving on top of it */
   private prepareKeyforms(K: KeyformFile) {
+    // base64 to bytes, each field once (one field can serve every head layer). A plain loop: Uint8Array.from(text, mapper)
+    // calls back per character, which took half of the refined Nana's load
+    const seen = new Map<string, Uint8Array>()
+    const bytes = (b64: string) => {
+      let out = seen.get(b64)
+      if (!out) {
+        const text = atob(b64)
+        out = new Uint8Array(text.length)
+        for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i)
+        seen.set(b64, out)
+      }
+      return out
+    }
     const save = { params: this.params, body: { ...this.body }, bust: { ...this.bust }, mouthW: this.mouthW, smile: this.smileShown,
       chains: Object.values(this.chains).map((c) => c.map((q) => ({ ...q }))) }
     const B = this.rig.body, tt = this.tuning.turn
@@ -627,14 +637,14 @@ export class Puppet {
       for (const L of this.layers) {
         // "torso": one field for every body layer (a drawn view's neck and collar), where the file has one
         const has = (f: string) => !!key.fields[f] || !!key.same?.includes(f)
-        const g = key.fields[L.def.id] ? L.def.id : L.def.group === 'head' ? 'head' : L.def.group.startsWith('hair') ? 'hair'
+        const g = Object.hasOwn(key.fields, L.def.id) ? L.def.id : L.def.group === 'head' ? 'head' : L.def.group.startsWith('hair') ? 'hair'
           : L.def.group === 'body' && has('torso') ? 'torso' : L.def.id
         const b64 = key.fields[g] ?? (key.same?.includes(g) ? key.fields.head : undefined)
         L.kf ||= []
         if (!b64) { L.kf[ki] = null; continue }
-        const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+        const raw = bytes(b64)
         const f = new Int16Array(raw.buffer, raw.byteOffset, raw.byteLength >> 1)
-        const m = K.mask?.[g] ? Uint8Array.from(atob(K.mask[g]), (c) => c.charCodeAt(0)) : undefined
+        const m = K.mask?.[g] ? bytes(K.mask[g]) : undefined
         const d = new Float32Array(L.rest.length)
         for (let i = 0; i < d.length; i += 2) {
           const [dx, dy] = sampleField(f, K, L.rest[i], L.rest[i + 1])
@@ -659,7 +669,7 @@ export class Puppet {
     for (const L of this.layers) {
       gl.deleteTexture(L.tex); L.frames.forEach((t) => gl.deleteTexture(t)); if (L.mask) gl.deleteTexture(L.mask); if (L.talk) gl.deleteTexture(L.talk)
       if (L.browTex) gl.deleteTexture(L.browTex)
-      gl.deleteVertexArray(L.vao); gl.deleteBuffer(L.pos)
+      gl.deleteVertexArray(L.vao); gl.deleteBuffer(L.pos); gl.deleteBuffer(L.uvs); gl.deleteBuffer(L.tris)
     }
     if (this.maskFb) { gl.deleteFramebuffer(this.maskFb); gl.deleteTexture(this.maskTex); this.maskFb = this.maskTex = null; this.maskSize = [0, 0] }
     this.layers = []
@@ -687,7 +697,7 @@ export class Puppet {
     // every layer's vertices sit on ONE global lattice, so the piecewise-linear deformation is identical
     // for overlapping layers: patches (eyes, mouth, expressions) can never drift off the face at big angles
     const [MW, MH] = this.model.canvas
-    const cell = Math.max(6, Math.round(Math.max(MW, MH) / 128))
+    const cell = latticeCell(MW, MH)
     const gx0 = Math.floor(L.x / cell), gy0 = Math.floor(L.y / cell)
     const cols = Math.ceil((L.x + L.w) / cell) - gx0, rows = Math.ceil((L.y + L.h) / cell) - gy0
     const occ = alphaGrid([img, ...frames], cols, rows, (L.x - gx0 * cell) / cell, (L.y - gy0 * cell) / cell, L.w / cell, L.h / cell)
@@ -851,7 +861,7 @@ export class Puppet {
     return {
       def: L, tex: this.texture(img), frames: frames.map((f) => this.texture(f)), mask: mask ? this.texture(mask) : undefined,
       talk: talk ? this.texture(talk) : undefined, browTex: brows ? this.texture(brows) : undefined,
-      vao, pos: pb, count: idx.length, rest, out: new Float32Array(rest.length), tri, tw: img.naturalWidth || img.width, th: img.naturalHeight || img.height,
+      vao, pos: pb, uvs: ub, tris: ib, count: idx.length, rest, out: new Float32Array(rest.length), tri, tw: img.naturalWidth || img.width, th: img.naturalHeight || img.height,
       wHead, wPhys1, wPhys2, dep, wBrow, browSide, browCap, wFront, wJaw, wNeck, wTwist, fol, folB, alt,
       outB: folB ? new Float32Array(rest.length) : undefined, stencilRef: 0, soft: 0, maskCh: -1, skin, altSkin,
     }
@@ -1098,7 +1108,7 @@ export class Puppet {
     }
     const C = A.chest
     if (C && bust) {
-      const d = Math.hypot((x - C.cx) / C.rx, (y - C.cy) / C.ry)
+      const ux = (x - C.cx) / C.rx, uy = (y - C.cy) / C.ry, d = Math.sqrt(ux * ux + uy * uy)  // per vertex: hypot allocates
       const w = 1 - smooth(0.2, 1.15, d)
       if (w > 0) {
         dy -= br * 0.012 * h.ry * w * (0.4 + B.bust) // the chest lifts more than the shoulders when breathing in

@@ -5,7 +5,8 @@
 <script type="importmap">{ "imports": {
   "three": "/node_modules/three/build/three.module.js",
   "three/examples/jsm/": "/node_modules/three/examples/jsm/",
-  "@pixiv/three-vrm": "/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+  "@pixiv/three-vrm": "/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js",
+  "@mediapipe/tasks-vision": "/node_modules/@mediapipe/tasks-vision/vision_bundle.mjs"
 } }</script>
 <canvas id="png" style="width: 200px; height: 240px"></canvas>
 <canvas id="vrm" style="width: 200px; height: 300px"></canvas>
@@ -17,7 +18,7 @@
   import { PngBody } from '../dist/png.js'
   import { VrmBody } from '../dist/vrm.js'
   import { createSpeech } from '../dist/voice.js'
-  import { startFaceTracking } from '../dist/tracking.js'
+  import { preloadFaceModel, startFaceTracking } from '../dist/tracking.js'
 
   const g = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
   const read = (canvas) => {
@@ -43,6 +44,19 @@
     b.setUint32(24, sr, true); b.setUint32(28, 2 * sr, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); s(36, 'data'); b.setUint32(40, 2 * n, true)
     for (let i = 0; i < n; i++) { const t = i / sr; b.setInt16(44 + 2 * i, 12000 * Math.sin(2 * Math.PI * 220 * t) * (Math.sin(Math.PI * 4 * t) > 0 ? 1 : 0.05), true) }
     return new Blob([b.buffer], { type: 'audio/wav' })
+  }
+
+  /** the camera refused while the face model comes in (the slow route of smoke.mjs); ahead: it was asked for before */
+  window.runRefused = async (ahead = false) => {
+    const files = { wasmUrl: '/node_modules/@mediapipe/tasks-vision/wasm', modelUrl: '/__model.task' }
+    if (ahead) preloadFaceModel(files).catch(() => {})
+    const real = navigator.mediaDevices.getUserMedia
+    navigator.mediaDevices.getUserMedia = async () => { await wait(150); throw new DOMException('refused', 'NotAllowedError') }
+    const p = new BodyPlayer(document.createElement('canvas'), new PngBody(), { autoplay: false })
+    const name = await startFaceTracking(p, files).then(() => 'started', (e) => e.name)
+    navigator.mediaDevices.getUserMedia = real
+    p.dispose()
+    return name
   }
 
   /** what a VRM player says of a file it cannot play, keeping the character before */

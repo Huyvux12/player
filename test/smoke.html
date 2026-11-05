@@ -173,6 +173,20 @@
       Object.assign(out, { model: p.model, drawn: px[3], made, freed, glError: gl.getError() })
     }
     {
+      // what several loads and a dispose leave on the GPU
+      const p = new Player(c, { autoplay: false, followPointer: false }), gl = p.puppet.gl
+      const left = { texture: 0, buffer: 0, vertexArray: 0 }
+      for (const [kind, make, free] of [['texture', 'createTexture', 'deleteTexture'], ['buffer', 'createBuffer', 'deleteBuffer'], ['vertexArray', 'createVertexArray', 'deleteVertexArray']]) {
+        const m = gl[make], f = gl[free]
+        gl[make] = function () { left[kind]++; return m.call(gl) }
+        gl[free] = function (t) { if (t) left[kind]--; return f.call(gl, t) }
+      }
+      for (let i = 0; i < 3; i++) await p.load(`../characters/${id}/`)
+      p.dispose()
+      for (const k of ['createTexture', 'deleteTexture', 'createBuffer', 'deleteBuffer', 'createVertexArray', 'deleteVertexArray']) delete gl[k]
+      out.left = left
+    }
+    {
       const p = new Player(c, { followPointer: false })
       p.dispose()
       let disposed = 0
@@ -194,6 +208,64 @@
     }
     c.remove()
     return out
+  }
+
+  /** random changes to a model.json, in the real player: whatever happens, the player goes on working. Refused: the model
+   *  before is still drawn. Loaded: the frames do not throw. And a good model after any of them draws (nothing is poisoned) */
+  window.runFuzz = async (id, keep, from, to) => {
+    const canvas2 = document.createElement('canvas')
+    canvas2.style.cssText = 'width: 160px; height: 160px'
+    document.body.append(canvas2)
+    let p = new Player(canvas2, { autoplay: false, followPointer: false })
+    await p.load(`../characters/${keep}/`)
+    const base = await json(id), files = await filesOf(id, base)
+    let frameErrors = 0
+    const onError = () => { frameErrors++ }
+    addEventListener('error', onError)
+    const rng = (seed) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32 }
+    const NASTY = [null, -1, 0, 1, 0.5, 2, 1e9, -1e9, 1e308, 'x', '', [], {}, true, [1, 2], [null], [[1]], { x: 1 }, 'smile']
+    const mutate = (v, r) => {
+      const pick = (xs) => xs[Math.floor(r() * xs.length)], root = { v }
+      let parent = root, key = 'v'
+      for (let d = 0; d < 8 && r() < 0.85; d++) {
+        const cur = parent[key]
+        if (!cur || typeof cur !== 'object') break
+        const keys = Array.isArray(cur) ? cur.map((_, i) => i) : Object.keys(cur)
+        if (!keys.length) break
+        parent = cur; key = pick(keys)
+      }
+      if (r() < 0.25) { if (Array.isArray(parent)) parent.splice(key, 1); else delete parent[key] } else parent[key] = pick(NASTY)
+      return root.v
+    }
+    const nan = () => p.puppet.layers.some((L) => L.out.length && Number.isNaN(L.out[0]))
+    const counts = { refused: 0, loaded: 0, blank: 0 }, wrong = []
+    for (let seed = from; seed <= to; seed++) {
+      const r = rng(seed)
+      let m = JSON.parse(JSON.stringify(base))
+      for (let k = 1 + Math.floor(r() * 2); k > 0; k--) m = mutate(m, r)
+      const map = new Map(files)
+      map.set(`${id}/model.json`, new Blob([JSON.stringify(m)]))
+      const before = frameErrors
+      let refused = null
+      try { await p.load(map) } catch (e) { refused = String(e.message || e) }
+      try { p.draw(1 / 60); p.draw(1 / 60) } catch { frameErrors++ }
+      if (refused) {
+        counts.refused++
+        if (p.puppet.model.name !== p.model.name || !p.puppet.layers.length) wrong.push(`#${seed} the model before is gone: ${refused.slice(0, 90)}`)
+      } else {
+        counts.loaded++
+        if (nan()) counts.blank++
+      }
+      if (frameErrors > before) wrong.push(`#${seed} a frame threw`)
+      if (refused === null || wrong.length) {
+        await p.load(`../characters/${keep}/`)
+        p.draw(1 / 60)
+        if (nan()) wrong.push(`#${seed} the next good model draws NaN`)
+      }
+    }
+    removeEventListener('error', onError)
+    p.dispose(); canvas2.remove()
+    return { counts, wrong: wrong.slice(0, 8) }
   }
 
   /** a package's connection dropping (the flaky routes of smoke.mjs): once, it is tried again and plays; always, the page
@@ -219,6 +291,10 @@
       box: filesOf(id, { ...m, layers: [{ ...first, w: 1e9 }, ...m.layers.slice(1)] }),
       json: filesOf(id, '{ "format": "livliv-model", '),
       layers: filesOf(id, { ...m, layers: Array.from({ length: 600 }, () => first) }),
+      chain: filesOf(id, { ...m, rig: { ...m.rig, chains: [{ points: [[0, 0], [1, 1]] }] } }),
+      browLine: filesOf(id, { ...m, anchors: { ...m.anchors, brows: [[1, 1, 5, 5]], brow_lines: [{ x: [1, 2] }] } }),
+      rig: filesOf(id, { ...m, rig: { ...m.rig, roll: 'x' } }),
+      mesh: filesOf(id, { ...m, layers: Array.from({ length: 25 }, (_, i) => ({ ...first, id: `l${i}`, x: -m.canvas[0], y: -m.canvas[1], w: 3 * m.canvas[0], h: 3 * m.canvas[1] })) }),
     }
     const out = {}
     for (const [k, files] of Object.entries(cases)) {

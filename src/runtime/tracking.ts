@@ -23,21 +23,28 @@ export type StartStep = { step: 'download'; progress: number } | { step: 'prepar
 let shared: Promise<Landmarker> | null = null
 let progress = 0
 const watchers = new Set<(p: number) => void>()
+/** the download while it runs, and who still wants it: the trackers waiting for their camera (by their ticket), or anyone
+ *  who asked ahead of time (`ahead`, for good: hovering a button says the model will be wanted) */
+let download: AbortController | null = null
+const waiting = new Set<object>()
+let ahead = false
 
 /** The face model, loaded once per page and kept: every tracker and every camera toggle reuses it. Call it early
  *  (hovering the camera button, the live dialog) and the camera opens without waiting for it. The files are read with
  *  progress and land in the HTTP cache, where the live window, opened in another tab, finds them */
-export function loadFaceModel(onProgress?: (p: number) => void): Promise<Landmarker> {
+export function loadFaceModel(onProgress?: (p: number) => void, ticket?: object): Promise<Landmarker> {
   if (onProgress) { watchers.add(onProgress); onProgress(progress) }
   const done = () => { if (onProgress) watchers.delete(onProgress) }
+  if (ticket) waiting.add(ticket); else ahead = true
   if (!shared) {
+    const { signal } = (download = new AbortController())
     shared = (async () => {
       const vision = await import('@mediapipe/tasks-vision')
       const [name, size] = (await vision.FilesetResolver.isSimdSupported()) ? RUNTIME.simd : RUNTIME.plain
       const runtime = `${FILES.wasm.replace(/\/$/, '')}/${name}`
       const got = [0, 0], total = size + MODEL_SIZE
       const read = async (url: string, i: number) => {
-        const r = await fetch(url)
+        const r = await fetch(url, { signal })
         if (!r.ok || !r.body) throw new Error(`${url} ${r.status}`)
         const reader = r.body.getReader(), parts: Uint8Array[] = []
         for (;;) {
@@ -54,17 +61,26 @@ export function loadFaceModel(onProgress?: (p: number) => void): Promise<Landmar
       // the runtime is read only to have it cached (MediaPipe loads it by URL again); the model is handed over as it is
       const [, model] = await Promise.all([read(`${runtime}.wasm?v=${V}`, 0), read(`${FILES.model}?v=${V}`, 1)])
       progress = 1; watchers.forEach((w) => w(1))
+      download = null
       return vision.FaceLandmarker.createFromOptions({ wasmLoaderPath: `${runtime}.js?v=${V}`, wasmBinaryPath: `${runtime}.wasm?v=${V}` }, {
         baseOptions: { modelAssetBuffer: model, delegate: 'GPU' },
         runningMode: 'VIDEO', numFaces: 1,
         outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
       })
     })()
-    shared.catch(() => { shared = null; progress = 0 })  // a failed download is tried again next time
+    shared.catch(() => { shared = null; progress = 0; download = null })  // a failed download is tried again next time
   }
   shared.then(done, done)
   return shared
 }
+/** a tracker no longer waits for the model (its camera was refused, or it was stopped): with nobody else waiting and nobody
+ *  having asked ahead, the download stops. It runs beside the camera's prompt to save time, and a refusal should not
+ *  cost 7 MB */
+function dropFaceModel(ticket: object) {
+  waiting.delete(ticket)
+  if (!waiting.size && !ahead) download?.abort()
+}
+
 /** a face unseen this long (s) is lost: the player hands the character back to its idle motion */
 export const LOST_AFTER = 0.4
 
@@ -94,6 +110,14 @@ export class FaceTracker {
   follow = 0.3
   /** process every n-th camera frame (power saving: 2) */
   every = 1
+  /** detections per second at most. The model runs on the main thread, inside the frame: 14-16 ms each on an M4 with a
+   *  busy machine, so on a phone it can take the frame rate with it. 'auto': a detection takes at most half of the main
+   *  thread's time, by what the last ones took, and never under 5 a second (a face is lost after LOST_AFTER). Unset: every
+   *  new camera frame, as livliv.ai has always done */
+  maxFps?: number | 'auto'
+  /** how long a detection takes (ms, smoothed) and when the next may run */
+  private detectMs = 0
+  private detectAt = 0
   /** set: calibration is remembered on this device for this character (localStorage), and found again next time */
   calibId?: string
   calibrated = false
@@ -161,13 +185,15 @@ export class FaceTracker {
     // the camera is asked for at once, so it warms up (and the user answers its prompt) while the model loads
     let modelReady = false
     const say = () => this.onStep?.(!modelReady ? (progress < 1 ? { step: 'download', progress } : { step: 'prepare' }) : { step: 'camera' })
-    const model = loadFaceModel(() => say()).then((lm) => { modelReady = true; say(); return lm })
+    const model = loadFaceModel(() => say(), this).then((lm) => { modelReady = true; say(); return lm })
     const camera = navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } })
     say()
     let stream: MediaStream
     try {
       [this.lm, stream] = await Promise.all([model, camera])
+      waiting.delete(this)
     } catch (e) {
+      dropFaceModel(this)
       camera.then((s) => s.getTracks().forEach((t) => t.stop()), () => {})  // the model failed: let the camera go
       throw e
     }
@@ -183,6 +209,7 @@ export class FaceTracker {
   /** the camera goes off; the face model stays loaded for the next time (loadFaceModel) */
   stop() {
     this.stopped = true
+    dropFaceModel(this)
     this.stream?.getTracks().forEach((t) => t.stop())
     this.ok = false
   }
@@ -192,9 +219,17 @@ export class FaceTracker {
     const now = performance.now()
     let f: Frame | null = null
     if (this.src) f = this.src.next(now)
-    else if (this.lm && this.video.readyState >= 2 && this.video.currentTime !== this.last) {
+    else if (this.lm && this.video.readyState >= 2 && this.video.currentTime !== this.last && now >= this.detectAt) {
       this.last = this.video.currentTime
-      if (++this.frameNo % this.every === 0) { f = toFrame(this.lm.detectForVideo(this.video, now), now); this.rec?.push(f) }
+      if (++this.frameNo % this.every === 0) {
+        const r = this.lm.detectForVideo(this.video, now)
+        if (this.maxFps) {  // (the first takes far longer, setting things up: not what later ones will)
+          const took = Math.min(200, performance.now() - now)
+          this.detectMs = this.detectMs ? this.detectMs + (took - this.detectMs) * 0.15 : took / 8
+          this.detectAt = now + (this.maxFps === 'auto' ? Math.min(200, 2 * this.detectMs) : 1000 / this.maxFps)
+        }
+        f = toFrame(r, now); this.rec?.push(f)
+      }
     }
     if (f) this.read(f, now)
     this.lostFor = this.seenAt < 0 ? Infinity : (now - this.seenAt) / 1000

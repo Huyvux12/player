@@ -2,7 +2,7 @@
 // runtime has always drawn from (ModelDef, the v3 `livemaker-puppet` layout), and v3 itself, read as it is, for good.
 // The runtime below never sees a v4 file: what changed in v4 is names, places and what is left out, not how a model
 // is drawn (a v3 model and its v4 export draw the same pixels).
-import type { LayerDef, ModelDef, Tuning } from './puppet'
+import type { ChainDef, LayerDef, ModelDef, Tuning } from './puppet'
 
 /** model.json's `format` and the newest `version` of it this player reads. A v4 file names, in `requires`, the
  *  features a player must have to draw it right (FEATURES: none in 4.0); fields it does not know it ignores */
@@ -37,7 +37,15 @@ export const LIMITS = {
   texture: 8192, texels: 64 * 2 ** 20,
   /** model.json and keyforms.json (bytes) */
   modelJson: 4 * 2 ** 20, keyforms: 32 * 2 ** 20,
+  /** a layer's mesh covers its box on one lattice (latticeCell), whatever its image: the vertices of all the boxes, and of
+   *  the layers bent by chains times how many bend them. The heaviest of 111 models here: 46 000 and 40 000 */
+  vertices: 2 ** 21, skinned: 2 ** 20,
 }
+/** no number in a model comes near this; past it sums overflow to Infinity and then NaN, and the character is gone */
+const BIG = 1e6
+const GROUPS = ['head', 'body', 'hair_back', 'hair_side', 'hair_front', 'hair_inner']
+/** the lattice every layer's mesh sits on, in model px (the same for all: see Puppet.buildLayer) */
+export const latticeCell = (w: number, h: number) => Math.max(6, Math.round(Math.max(w, h) / 128))
 const IMAGE = /^textures\/[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:webp|png)$/
 const FILE = /^(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9_][A-Za-z0-9_.-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$/
 
@@ -85,14 +93,59 @@ function check(m: ModelDef) {
   if (!(num(w) && num(h) && w > 0 && h > 0 && w <= LIMITS.canvas && h <= LIMITS.canvas)) bad(`its canvas ${w} x ${h} is out of range`)
   if (!Array.isArray(m.layers) || !m.layers.length) bad('it has no layers')
   if (m.layers.length > LIMITS.layers) bad(`it has ${m.layers.length} layers, more than ${LIMITS.layers}`)
-  const A = m.anchors, hd = A?.head
-  if (!hd || ![hd.cx, hd.cy, hd.rx, hd.ry, A.neck_y, A.top_y, A.bottom_y, A.hair_root_y].every(num) || !(hd.rx > 0 && hd.ry > 0)
-    || !Array.isArray(A.face) || A.face.length !== 4 || !A.face.every(num)) bad('its anchors are missing or not numbers')
-  list(A.eyes, LIMITS.eyes, 'anchors.eyes'); list(A.brows, LIMITS.eyes, 'anchors.brows')
-  for (const line of list(A.brow_lines, LIMITS.eyes, 'anchors.brow_lines') as ({ x?: unknown } | null)[]) {
-    if (line) list(line.x, LIMITS.points, 'a brow line')
+  const A = m.anchors, hd = A?.head, inRange = (v: unknown) => num(v) && Math.abs(v) <= BIG
+  if (!hd || ![hd.cx, hd.cy, hd.rx, hd.ry, A.neck_y, A.top_y, A.bottom_y, A.hair_root_y].every(inRange) || !(hd.rx > 1e-3 && hd.ry > 1e-3)
+    || !Array.isArray(A.face) || A.face.length !== 4 || !A.face.every(inRange)) bad('its anchors are missing or not numbers')
+  // what the rig computes with: a number in range, a list of them, an object of them. Missing (or null: a build's None) is
+  // the player's default. Anything else came out as NaN, a character gone for this player's whole life, or as an error
+  // thrown once the model before it had been dropped
+  const sane = (v: unknown, what: string) => { if (v != null && !inRange(v)) bad(`${what} is not a number in range`) }
+  const nums = (v: unknown, lo: number, hi: number, what: string) => {
+    if (v == null) return
+    if (!Array.isArray(v) || v.length < lo || v.length > hi || !v.every(inRange)) bad(`${what} is not a list of ${lo} to ${hi} numbers`)
   }
-  let images = 0
+  const fields = (o: unknown, names: string, what: string) => {
+    if (o == null) return
+    if (typeof o !== 'object') bad(`${what} is not an object`)
+    for (const n of names.split(' ')) sane((o as Record<string, unknown>)[n], `${what}.${n}`)
+  }
+  const weights = (o: unknown, what: string) => {
+    if (o == null) return
+    if (typeof o !== 'object' || Array.isArray(o)) bad(`${what} is not an object`)
+    for (const [k, v] of Object.entries(o as object)) sane(v, `${what}.${k.slice(0, 60)}`)
+  }
+  sane(A.collar_y, 'anchors.collar_y')
+  fields(A.jaw, 'top chin half open round wide', 'anchors.jaw')
+  fields(A.chest, 'cx cy rx ry', 'anchors.chest')
+  for (const b of list(A.eyes, LIMITS.eyes, 'anchors.eyes')) { if (b == null) bad('anchors.eyes has an empty entry'); nums(b, 4, 4, 'anchors.eyes') }
+  for (const b of list(A.brows, LIMITS.eyes, 'anchors.brows')) nums(b, 4, 4, 'anchors.brows')
+  for (const line of list(A.brow_lines, LIMITS.eyes, 'anchors.brow_lines') as ({ x?: unknown; bottom?: unknown; lid?: unknown; cap?: unknown } | null)[]) {
+    if (line == null) continue
+    const n = list(line.x, LIMITS.points, 'a brow line').length
+    if (!n) bad('a brow line has no points')
+    nums(line.x, n, n, 'a brow line'); nums(line.bottom ?? [], n, n, 'a brow line'); nums(line.lid ?? [], n, n, 'a brow line')
+    if (line.cap != null) nums(line.cap, n, n, 'a brow line')
+  }
+  fields(m.tuning, 'turn nod hair blink expr mouth breath hairFront hairBack', 'tuning')
+  const R = m.rig
+  fields(R, 'yaw pitch roll bulge bulge_shape hair_limit wind breath sway brow pitch_ease jaw', 'rig')
+  nums(R?.bulge_extent, 3, 5, 'rig.bulge_extent'); nums(R?.drift, 2, 2, 'rig.drift'); nums(R?.hair_drive, 3, 3, 'rig.hair_drive')
+  fields(R?.body, 'yaw roll breath bust', 'rig.body'); fields(R?.neck, 'twist reach', 'rig.neck')
+  if (R?.hair != null) for (const k of ['front', 'back', 'side'] as const) nums(R.hair[k], 5, 5, `rig.hair.${k}`)
+  for (const c of list(R?.chains, LIMITS.chains, 'rig.chains') as (ChainDef | null)[]) {
+    if (!c || typeof c.id !== 'string') bad('a chain has no id')
+    const what = `chain ${c!.id.slice(0, 60)}`, points = list(c!.points, LIMITS.points, `${what}'s points`)
+    if (points.length < 2) bad(`${what} has fewer than two points`)
+    for (const q of points) { if (q == null) bad(`${what} has an empty point`); nums(q, 2, 2, `${what}'s points`) }
+    if (!c!.k) bad(`${what} has no k`)
+    nums(c!.k, 2, 2, `${what}'s k`)
+    for (const n of ['damp', 'drive', 'hang', 'wind'] as const) if (!num(c![n])) bad(`${what} has no ${n}`)
+    fields(c, 'depth damp drive hang wind freq limit sigma reach', what)
+    weights(c!.bias, `${what}'s bias`)
+  }
+  const cell = latticeCell(w, h)
+  const bangs = m.layers.find((L) => L?.group === 'hair_front')?.bones
+  let images = 0, vertices = 0, skinned = 0, read = 0
   for (const L of m.layers) {
     if (!L || typeof L !== 'object' || typeof L.id !== 'string') bad('a layer has no id')
     if (![L.x, L.y, L.w, L.h].every(num) || !(L.w > 0 && L.h > 0) || L.x < -w || L.y < -h || L.x + L.w > 2 * w || L.y + L.h > 2 * h) {
@@ -104,14 +157,32 @@ function check(m: ModelDef) {
       if (typeof p !== 'string' || !FILE.test(p)) bad(`layer ${L.id.slice(0, 60)}: "${String(p).slice(0, 80)}" is not a path inside the package`)
       if (++images > LIMITS.images) bad(`it names more than ${LIMITS.images} images`)
     }
+    const what = `layer ${L.id.slice(0, 60)}`
+    if (!GROUPS.includes(L.group)) bad(`${what}'s group is not one a player knows`)
+    for (const n of ['role', 'clip', 'param'] as const) if (L[n] != null && typeof L[n] !== 'string') bad(`${what}'s ${n} is not text`)
+    if (L.visemes != null && !(Array.isArray(L.visemes) && L.visemes.every((v) => typeof v === 'string'))) bad(`${what}'s visemes are not text`)
+    sane(L.depth, `${what}'s depth`); sane(L.fall, `${what}'s fall`); sane(L.fall_end, `${what}'s fall_end`)
+    nums(L.pivot, 2, 2, `${what}'s pivot`); nums(L.range, 2, 2, `${what}'s range`); nums(L.rigid, 2, 2, `${what}'s rigid`)
+    weights(L.blush, `${what}'s blush`); weights(L.show, `${what}'s show`); weights(L.hide, `${what}'s hide`)
+    // what its mesh will cost, by its box alone: a 1 x 1 picture stretched over a big box was a 150 000 vertex layer
+    const bones = list(L.bones, LIMITS.chains, `${what}'s bones`)
+    if (new Set(bones).size !== bones.length) bad(`${what} names a chain twice`)
+    if (!bones.every((b) => typeof b === 'string')) bad(`${what}'s bones are not chain ids`)
+    const verts = (Math.ceil((L.x + L.w) / cell) - Math.floor(L.x / cell) + 1) * (Math.ceil((L.y + L.h) / cell) - Math.floor(L.y / cell) + 1)
+    const overBangs = L.id === 'brows' || L.role === 'expr_brows' || !!L.brow_tex  // these read their whole box back, and follow the bangs' chains
+    vertices += verts
+    skinned += verts * (bones.length + (overBangs && Array.isArray(bangs) ? bangs.length : 0))
+    if (overBangs) read += L.w * L.h
   }
-  list(m.expressions, LIMITS.expressions, 'expressions')
-  for (const c of list(m.rig?.chains, LIMITS.chains, 'rig.chains') as { points?: unknown }[]) list(c?.points, LIMITS.points, 'a chain')
+  if (vertices > LIMITS.vertices) bad(`its layers' meshes would have ${vertices} vertices, more than ${LIMITS.vertices}`)
+  if (skinned > LIMITS.skinned) bad(`its chains would bend ${skinned} vertices, more than ${LIMITS.skinned}`)
+  if (read > LIMITS.texels) bad(`its brows layers cover ${read} pixels, more than ${LIMITS.texels}`)
+  for (const e of list(m.expressions, LIMITS.expressions, 'expressions') as ({ id?: unknown } | null)[]) if (!e || typeof e.id !== 'string') bad('an expression has no id')
   if (m.keyforms !== undefined && (typeof m.keyforms !== 'string' || !FILE.test(m.keyforms))) bad('keyforms is not a path inside the package')
   if (m.watermark != null && typeof m.watermark !== 'string') bad('its watermark is not text')
 }
 
-interface V4Layer extends Omit<LayerDef, 'name'> { label?: Labels; expression?: string }
+interface V4Layer extends Omit<LayerDef, 'name' | 'depth'> { depth?: number; label?: Labels; expression?: string }
 interface V4 {
   format: string; version: number; name: string; meta: ModelMeta; requires?: string[]; files?: ModelFiles
   canvas: [number, number]; profile?: { id: string; facing?: string; glasses?: boolean }
@@ -133,7 +204,7 @@ function lower(m: V4, lang: string): ModelDef {
     if (!k.startsWith('x-') && (typeof p !== 'string' || !FILE.test(p))) throw new Error(`files.${k}: "${p}" is not a path in the package`)
   }
   const layers = m.layers.map(({ label, expression, ...L }) =>
-    ({ ...L, name: label ? pickLabel(label, 'en', L.id) : L.id, ...(expression ? { param: expression } : {}) }) as LayerDef)
+    ({ ...L, depth: L.depth ?? 0, name: label ? pickLabel(label, 'en', L.id) : L.id, ...(expression ? { param: expression } : {}) }) as LayerDef)
   let tuning: Partial<Tuning> | undefined
   if (m.tuning) {
     const { hair_front, hair_back, ...t } = m.tuning

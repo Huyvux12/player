@@ -217,7 +217,9 @@ What readers do:
 4. Refuse a model whose layer image is missing; warn and play on when an optional file is missing.
 5. Hold packages to limits before decoding. The reference player's: `model.json` 4 MB; canvas 8192 px a side; 512
    layers; 2048 ZIP entries and 256 MB uncompressed; `keyforms.json` 32 MB; no entry with `..`, an absolute path or
-   encryption.
+   encryption; and what the meshes would cost, from the boxes alone: 2 097 152 vertices on a lattice of
+   `max(6, round(max(width, height) / 128))` px, 1 048 576 of them times the chains bending them, a chain named once per
+   layer.
 6. Treat everything in the package as data: there is nothing to run and no URL to fetch, and every string (names,
    labels, credits) is shown as plain text.
 7. Draw the watermark the package asks for (§3).

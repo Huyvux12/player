@@ -23,6 +23,9 @@ export interface FaceTrackingOptions extends FaceModelFiles {
   smoothing?: number
   /** how much leaning toward / away from the camera moves the character, 0 (default) .. 2 */
   follow?: number
+  /** how many times a second to look for the face at most. 'auto' (default): as often as the camera gives a new picture,
+   *  until that would take over half of the page's main thread (the model runs there); then less, 5 at least */
+  maxFps?: number | 'auto'
   /** keep the calibration (the user's resting pose) on this device under this name (localStorage) */
   remember?: string
   /** what starting waits for: the download (progress 0..1, first time only), preparing the model, the camera */
@@ -65,6 +68,7 @@ export async function startFaceTracking(player: Host, options: FaceTrackingOptio
   const t = new FaceTracker()
   t.mirror = options.mirror ?? true
   t.setSmoothing(options.smoothing ?? 0.5)
+  t.maxFps = options.maxFps ?? 'auto'
   t.calibId = options.remember
   t.onStep = options.onProgress
   t.trace = options.trace ?? ''

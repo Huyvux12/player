@@ -199,7 +199,7 @@ tracking.calibrate() // the user's current pose becomes "facing front" (it also 
 tracking.stop()
 ```
 
-A refused or missing camera rejects with the browser's error. `trace: 'synth'` plays a demo motion and asks for no camera,
+A refused or missing camera rejects with the browser's error, and stops the download unless `preloadFaceModel()` asked for it. `trace: 'synth'` plays a demo motion and asks for no camera,
 which makes a good fallback (`example/camera.js` does all of this):
 
 ```js
@@ -216,6 +216,7 @@ const tracking = await startFaceTracking(player).catch((e) => {
 | `mirror` | `true` | move like a mirror image |
 | `smoothing` | `0.5` | 0 quick and shakier .. 1 steady and slower |
 | `follow` | `0` | how much leaning toward / away from the camera moves the character (0..2) |
+| `maxFps` | `'auto'` | how often to look for the face, at most: a number, or as often as the camera allows until that would take over half of the main thread (the model runs there), then less, 5 a second at least |
 | `remember` | | keep the calibration on this device under this name (localStorage) |
 | `wasmUrl` | jsDelivr | folder with MediaPipe's `vision_wasm_internal.{js,wasm}` and the `nosimd` pair |
 | `modelUrl` | Google's bucket | `face_landmarker.task` |
@@ -320,7 +321,9 @@ an error and the model before stays. Before anything reaches the GPU:
   compressed entry stops inflating at the size its directory gives (a ZIP bomb goes no further); no paths outside the
   package, no encryption, no ZIP64.
 - `model.json` (any version): a canvas of 8192 px a side at most, 512 layers, 2048 images, every layer's box inside
-  twice the canvas, every image a path inside the package, numbers that are numbers.
+  twice the canvas, every image a path inside the package, numbers that are numbers. What a mesh would cost is held too,
+  counted from the boxes before anything is built: 2 097 152 vertices in all, 1 048 576 bent by chains (the largest models
+  built have 46 000 and 40 000), and a layer names a chain once.
 - Images: 8192 px a side (or the GPU's limit, if lower) and 64 million pixels in all at most, checked once each image's
   size is known, before it is decoded in full.
 - `keyforms.json` that does not fit its grid is left out (the character plays on the rig alone).

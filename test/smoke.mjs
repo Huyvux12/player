@@ -22,7 +22,7 @@ const list = (dir, at = '') => readdirSync(join(dir, at), { withFileTypes: true 
   .flatMap((d) => (d.isDirectory() ? list(dir, join(at, d.name)) : [join(at, d.name).split('\\').join('/')]))
 const files = Object.fromEntries(ids.map((id) => [id, list(join(chars, id))]))
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' }
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' }
 const vrm = tinyVrm()
 /** an image bomb: a 9000 x 9000 PNG (all black, 80 KB), past the player's 8192 px a side */
 function bombPng(side = 9000) {
@@ -36,9 +36,23 @@ function bombPng(side = 9000) {
     chunk('IDAT', deflateSync(Buffer.alloc(side * (side + 1)))), chunk('IEND', Buffer.alloc(0))])
 }
 const bomb = bombPng()
+/** a face model that takes a while to arrive, for what happens to its download (runDownload in bodies.html) */
+const slowModel = { asked: 0, finished: 0 }
 /** requests per route of runDropped */
 const dropped = {}
 const server = createServer((req, res) => {
+  if (req.url.startsWith('/__model.task')) {
+    slowModel.asked++
+    res.writeHead(200, { 'content-type': 'application/octet-stream' })
+    let left = 25
+    const tick = setInterval(() => {
+      if (res.destroyed) { clearInterval(tick); return }
+      res.write(Buffer.alloc(150_000))
+      if (--left === 0) { clearInterval(tick); slowModel.finished++; res.end() }
+    }, 40)
+    res.on('close', () => clearInterval(tick))
+    return
+  }
   const drop = req.url.match(/^\/__dropped\/(once|always|missing)\/(.+)\.livliv$/)
   if (drop) {
     const [, how, id] = drop, n = (dropped[how] = (dropped[how] || 0) + 1)
@@ -100,7 +114,7 @@ try {
   // hostile packages: refused with the model before kept; broken keyforms: played on the rig alone
   const kfId = ids.find((id) => JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')).files?.keyforms) ?? ids[0]
   const hostile = await page.evaluate(([a, b]) => window.runHostile(a, b), [ids[0], kfId])
-  const why = { bomb: /too large/, path: /not an image path|not a path/, canvas: /canvas/, box: /box/, json: /not a model\.json/, layers: /layers/ }
+  const why = { bomb: /too large/, path: /not an image path|not a path/, canvas: /canvas/, box: /box/, json: /not a model\.json/, layers: /layers/, mesh: /vertices/, chain: /no id/, browLine: /brow line/, rig: /rig\.roll/ }
   for (const [k, re] of Object.entries(why)) {
     const r = hostile[k], ok = !r.loaded && re.test(r.refused) && !!r.kept
     if (!ok) failed++
@@ -110,6 +124,11 @@ try {
   if (!kfOk) failed++
   console.log(`${kfOk ? 'ok  ' : 'FAIL'} broken keyforms: ${hostile.keyforms.refused ?? `${hostile.keyforms.name} plays on the rig alone`}`)
 
+  // random changes to a model.json in the real player (see runFuzz): the seeds of a run are the same every time
+  const fuzzed = await page.evaluate(([a, b]) => window.runFuzz(a, b, 1, 150), [ids.find((i) => i === 'k02') ?? ids[0], ids[0]])
+  const fuzzOk = !fuzzed.wrong.length
+  if (!fuzzOk) failed++
+  console.log(`${fuzzOk ? 'ok  ' : 'FAIL'} 150 changed models: ${fuzzed.counts.refused} refused, ${fuzzed.counts.loaded} loaded, of them ${fuzzed.counts.blank} blank${fuzzOk ? '' : `\n  ${fuzzed.wrong.join('\n  ')}`}`)
   // a package whose connection drops (see runDropped)
   const drops = await page.evaluate((id) => window.runDropped(id), ids[0])
   const dropsOk = /^played/.test(drops.once) && dropped.once === 2 && /could not load/.test(drops.always) && !/Failed to fetch/.test(drops.always) && dropped.always === 2
@@ -121,8 +140,9 @@ try {
   const life = await page.evaluate((id) => window.runLifecycle(id), ids[0])
   const lifeOk = /disposed/.test(life.load) && life.model === null && life.drawn === 0 && life.freed >= life.made && life.glError === 0
     && life.driver === 1 && !!life.again && life.mic === 'ended' && life.supported === true
+    && Object.values(life.left).every((n) => n <= 0)
   if (!lifeOk) failed++
-  console.log(`${lifeOk ? 'ok  ' : 'FAIL'} dispose while running: load "${life.load}", ${life.made} textures made, ${life.freed} freed, drawn ${life.drawn}, GL error ${life.glError}, driver disposed ${life.driver}, a new player ${life.again}, microphone ${life.mic}`)
+  console.log(`${lifeOk ? 'ok  ' : 'FAIL'} dispose while running: load "${life.load}", ${life.made} textures made, ${life.freed} freed, drawn ${life.drawn}, GL error ${life.glError}, driver disposed ${life.driver}, a new player ${life.again}, microphone ${life.mic}, left on the GPU after 3 loads and dispose ${JSON.stringify(life.left)}`)
 
   // bodies: a PNGTuber shows each picture and follows the drivers; a VRM loads, draws and takes its expressions
   await page.goto(`http://127.0.0.1:${server.address().port}/test/bodies.html`)
@@ -170,6 +190,20 @@ try {
   if (!vaOk) failed++
   console.log(`${vaOk ? 'ok  ' : 'FAIL'} VRM, loaded again on a wide canvas: aspect ${vrmAgain?.aspect1}, ${vrmAgain?.aspect2}; a failed load kept ${vrmAgain?.kept}, covers ${(vrmAgain?.share * 100).toFixed(1)} %; on a 2D canvas: ${vrmOn2d}`)
   if (errors.length) { failed++; console.log(`FAIL page errors:\n  ${errors.join('\n  ')}`) }
+  // a camera that is refused: the face model's download stops with it, unless someone asked for the model ahead of time
+  await page.goto(`http://127.0.0.1:${server.address().port}/test/bodies.html`)
+  await page.waitForFunction(() => typeof window.runBodies === 'function')
+  const refused = await page.evaluate(() => window.runRefused())
+  await new Promise((r) => setTimeout(r, 1500))
+  const refusedOk = refused === 'NotAllowedError' && slowModel.finished === 0
+  if (!refusedOk) failed++
+  console.log(`${refusedOk ? 'ok  ' : 'FAIL'} camera refused (${refused}): the face model asked ${slowModel.asked} time(s), finished ${slowModel.finished}`)
+  await page.evaluate(() => window.runRefused(true)).catch(() => {})
+  await new Promise((r) => setTimeout(r, 2000))
+  const aheadOk = slowModel.finished === 1
+  if (!aheadOk) failed++
+  console.log(`${aheadOk ? 'ok  ' : 'FAIL'} camera refused after a preload: the download goes on (finished ${slowModel.finished})`)
+
   // the example pages: the cover in the canvas's box until the character is ready, then the character over it
   for (const name of ['index', 'demo', 'gallery']) {
     const p = await browser.newPage()

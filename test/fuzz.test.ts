@@ -154,3 +154,61 @@ describe('fuzz: .livliv', () => {
     await assert.rejects(unzip(new Blob([locked as BlobPart])), /encrypted/)
   })
 })
+
+describe('what a mesh would cost', () => {
+  /** a model of `n` layers, each a box of 3 x the canvas (legal by itself): a tiny file for a big mesh */
+  const big = (n: number, more: object = {}) => {
+    const m = example(), first = m.layers[0]
+    return { ...m, canvas: [768, 768], layers: Array.from({ length: n }, (_, i) => ({ ...first, id: `l${i}`, x: -768, y: -768, w: 2304, h: 2304, ...more })) }
+  }
+  it('counts vertices from the boxes', () => {
+    assert.throws(() => readModel(big(15)), /vertices/)     // 15 x 148 225 > 2 097 152
+    assert.doesNotThrow(() => readModel(big(14)))
+  })
+  it('counts vertices bent by chains, and refuses a chain named twice', () => {
+    assert.throws(() => readModel(big(1, { bones: Array(3000).fill('c') })), /bones|chain/)
+    assert.throws(() => readModel(big(1, { bones: ['c', 'c'] })), /twice/)
+    assert.throws(() => readModel(big(8, { bones: ['a'] })), /bend/)  // 8 x 148 225 > 1 048 576
+    assert.doesNotThrow(() => readModel(big(7, { bones: ['a'] })))
+  })
+  it('counts what brows layers read back', () => {
+    const m = example(), first = m.layers[0]
+    const boxes = { ...m, canvas: [8000, 8000], layers: [{ ...first, id: 'brows', x: -1000, y: -1000, w: 9000, h: 9000 }] }
+    assert.throws(() => readModel(boxes), /brows layers/)
+  })
+})
+
+describe('what the rig computes with', () => {
+  const first = () => example().layers[0]
+  const refused: [string, (m: ReturnType<typeof example>) => void, RegExp][] = [
+    ['a chain with no id', (m) => { m.rig = { chains: [{ points: [[0, 0], [1, 1]], k: [1, 1], damp: 1, drive: 1, hang: 0, wind: 0 }] } }, /no id/],
+    ['an empty chain', (m) => { m.rig = { chains: [null] } }, /no id/],
+    ['a chain with one point', (m) => { m.rig = { chains: [{ id: 'c', points: [[0, 0]], k: [1, 1], damp: 1, drive: 1, hang: 0, wind: 0 }] } }, /two points/],
+    ['a chain with no k', (m) => { m.rig = { chains: [{ id: 'c', points: [[0, 0], [1, 1]], damp: 1, drive: 1, hang: 0, wind: 0 }] } }, /no k/],
+    ['a brow line with no bottom', (m) => { m.anchors.brows = [[1, 1, 5, 5]]; m.anchors.brow_lines = [{ x: [1, 2], lid: [3, 4] }] }, /brow line/],
+    ['rig.roll as text', (m) => { m.rig = { ...m.rig, roll: 'x' } }, /rig\.roll/],
+    ['rig.body.roll past any sense', (m) => { m.rig = { ...m.rig, body: { roll: 1e308 } } }, /rig\.body\.roll/],
+    ['a spring chain of the wrong length', (m) => { m.rig = { ...m.rig, hair: { front: [1, 2] } } }, /rig\.hair\.front/],
+    ['tuning as text', (m) => { m.tuning = { turn: 'x' } }, /tuning\.turn/],
+    ['a role that is no text', (m) => { m.layers[0].role = 7 }, /role/],
+    ['an unknown group', (m) => { m.layers[0].group = 'wings' }, /group/],
+    ['a pivot of one number', (m) => { m.layers[0].pivot = [1] }, /pivot/],
+    ['a blush weight as text', (m) => { m.layers[0].blush = { smile: 'x' } }, /blush/],
+    ['an empty eye box', (m) => { m.anchors.eyes = [null] }, /eyes/],
+  ]
+  for (const [name, change, why] of refused) {
+    it(`refuses ${name}`, () => {
+      const m = example()
+      change(m)
+      assert.throws(() => readModel(m), why)
+    })
+  }
+  it('takes what is simply missing, and null where a build wrote None', () => {
+    const m = example()
+    delete m.tuning; delete m.rig
+    m.anchors.brows = [null, [1, 1, 5, 5]]; m.anchors.collar_y = null
+    const { depth: _, ...noDepth } = first()
+    m.layers[0] = noDepth
+    assert.equal(readModel(m).layers[0].depth, 0)  // the schema's default
+  })
+})
