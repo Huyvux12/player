@@ -12,9 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> · <b>中文</b> · <a href="README.ja.md">日本語</a></p>
 
-<!-- 演示 GIF（占位）。把 media/demo.gif 放在这里（约 720 × 450，5 MB 以内），再取消注释：
 <p align="center"><img src="media/demo.gif" alt="精选角色在呼吸、眨眼、转头、说话" width="720"></p>
--->
 
 特点：
 

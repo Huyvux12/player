@@ -12,9 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <b>日本語</b></p>
 
-<!-- デモ GIF（プレースホルダー）。media/demo.gif（720 × 450 前後、5 MB 以内）を置いてから、コメントを外してください：
 <p align="center"><img src="media/demo.gif" alt="厳選キャラクターが呼吸し、まばたきし、振り向き、話す様子" width="720"></p>
--->
 
 - WebGL2、依存なし、コアは gzip で約 34 KB
 - リップシンク（マイク、音声、動画）と Web カメラのフェイストラッキング（MediaPipe）はブラウザ内で動作し、必要なときだけ読み込めます
