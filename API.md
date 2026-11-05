@@ -138,8 +138,10 @@ only with `idle` off (or use a [driver](#drivers) to add to them). `mouthOpen`, 
 - `play()`, `pause()`, `playing`. The loop also skips drawing while the canvas is scrolled out of view.
 - `resize()`: draws now at the canvas's current size. Only needed after resizing a paused player.
 - `snapshot()`: the current frame as a PNG data URL (with the mark).
-- `dispose()`: stops, removes drivers, frees GPU memory. A `load()` still running rejects, and a camera or microphone still
-  starting (`startFaceTracking`, `startLipSync`) is let go as soon as it opens. The canvas can take a new `Player` afterwards.
+- `dispose()`: stops, removes drivers, frees the character's GPU memory. A `load()` still running rejects, and a camera or
+  microphone still starting (`startFaceTracking`, `startLipSync`) is let go as soon as it opens. The canvas keeps its WebGL
+  context and can take a new `Player` afterwards. A browser allows about 16 contexts at once and drops the oldest past that,
+  so a page that shows many characters over time should reuse its canvases.
 - `puppet`: the renderer underneath, for what this API does not cover. Its fields can change between versions.
 
 ### The mark
@@ -349,7 +351,8 @@ play as they are. The rules for what changes the version: [FORMAT.md §9](FORMAT
 
 ## Browser support
 
-WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+, on desktop and mobile (including in-app WebViews).
+WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+. Tested on current desktop Chromium, Firefox and WebKit;
+not yet on phones or in in-app WebViews.
 
 ## Building
 

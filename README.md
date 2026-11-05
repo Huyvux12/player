@@ -151,7 +151,7 @@ npm run test:browser   # every featured character drawn in headless Chromium; on
 
 ## Browser support
 
-WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+, on desktop and mobile.
+WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+. Tested on current desktop browsers, not yet on phones.
 
 ## License
 

@@ -122,7 +122,7 @@ npm run test:browser   # ヘッドレス Chromium で全キャラクターを描
 
 ## 対応ブラウザ
 
-WebGL2 と ES2023 が必要です：Chrome / Edge 97+、Firefox 104+、Safari 15.4+（デスクトップ、モバイルとも）。
+WebGL2 と ES2023 が必要です：Chrome / Edge 97+、Firefox 104+、Safari 15.4+。テスト済みなのはデスクトップの最新版で、スマートフォンはまだテストしていません。
 
 ## ライセンス
 

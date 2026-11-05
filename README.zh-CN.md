@@ -124,7 +124,7 @@ npm run test:browser   # 在无头 Chromium 里画出每个精选角色；先执
 
 ## 浏览器支持
 
-需要 WebGL2 和 ES2023：Chrome / Edge 97+、Firefox 104+、Safari 15.4+，桌面和手机都可以。
+需要 WebGL2 和 ES2023：Chrome / Edge 97+、Firefox 104+、Safari 15.4+。目前在桌面最新版上测过，手机还没有测。
 
 ## 许可
 
