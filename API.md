@@ -297,7 +297,7 @@ await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
 - **VRM** (`@livliv/player/vrm`): VRM 0.x and 1.0, drawn with [three.js](https://threejs.org) and
   [three-vrm](https://github.com/pixiv/three-vrm), which you install (`npm install three @pixiv/three-vrm`; three.js 0.170
   or newer, played here on 0.170, 0.186 and 0.187 with three-vrm 3.5.5; optional peer dependencies, so the rest of the
-  package does not need them). Files from VRoid Studio, UniVRM and the VRM add-on for Blender play. The head and neck turn, the spine sways, the eyes
+  package does not need them). Files from VRoid Studio and UniVRM play. So does a real file from the VRM add-on for Blender; a fresh export from Blender hasn't been tested, and [issue #1](https://github.com/livliv-dev/player/issues/1) is still open. The head and neck turn, the spine sways, the eyes
   blink and look, the mouth takes the visemes (`aa`, `ee`, `ou`, or `ih`, `oh` where those are missing, from `mouthOpen` and `vowel`),
   and the expressions are the model's `happy`, `angry`, `sad`, `relaxed` and `surprised` where it has them, then any
   of its own under the names it gives them; hair and clothes swing by the model's own spring bones, and its constraints apply. Framed from the head to the hips with the arms down; no hands, no full body, no camera
