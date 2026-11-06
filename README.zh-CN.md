@@ -118,6 +118,7 @@ npm run check          # 类型检查
 npm run build          # dist/：index.js、tracking.js、voice.js、body.js、png.js、vrm.js（ES 模块）、chunks/ 和 types/
 npm test               # 单元测试和模糊测试（Node 22.18 及以上，不需要浏览器）
 npm run test:browser   # 在无头 Chromium 里画出每个精选角色；先执行一次 npx playwright-core install chromium-headless-shell
+npm run test:engines   # 在 Firefox 和 WebKit 上跑一个小样本，机器要能启动 WebGL2（有 GPU 或软件 GL）；先执行一次 npx playwright-core install firefox webkit
 ```
 
 `src/runtime/` 是 livliv.ai 自己在用的渲染和动作代码，这个仓库从它发布。参见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 报告。

@@ -144,6 +144,7 @@ npm run check          # types
 npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ and types/
 npm test               # unit and fuzz tests (Node 22.18 or newer, no browser)
 npm run test:browser   # every featured character drawn in headless Chromium; once: npx playwright-core install chromium-headless-shell
+npm run test:engines   # a sample on Firefox and WebKit, where WebGL2 starts (a GPU or a software GL); once: npx playwright-core install firefox webkit
 ```
 
 `src/runtime/` is the renderer and motion code livliv.ai runs; this repository is published from it. See

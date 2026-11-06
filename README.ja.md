@@ -116,6 +116,7 @@ npm run check          # 型チェック
 npm run build          # dist/：index.js、tracking.js、voice.js、body.js、png.js、vrm.js（ES モジュール）、chunks/ と types/
 npm test               # ユニットテストとファジング（Node 22.18 以降、ブラウザ不要）
 npm run test:browser   # ヘッドレス Chromium で全キャラクターを描画。最初に一度 npx playwright-core install chromium-headless-shell
+npm run test:engines   # Firefox と WebKit で小さなサンプルを実行。WebGL2 が動く環境（GPU かソフトウェア GL）が必要。最初に一度 npx playwright-core install firefox webkit
 ```
 
 `src/runtime/` は livliv.ai 自身が使っているレンダラーとモーションのコードで、このリポジトリはそこから公開しています。[CONTRIBUTING.md](CONTRIBUTING.md) もご覧ください。セキュリティの問題は [SECURITY.md](SECURITY.md) のとおりにご報告ください。

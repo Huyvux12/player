@@ -122,6 +122,11 @@ if (engine) {
     page.on('pageerror', (e) => errors.push(e.message))
     await page.goto(`http://127.0.0.1:${server.address().port}/test/smoke.html`)
     await page.waitForFunction(() => typeof window.run === 'function')
+    if (!await page.evaluate(async () => (await import('/dist/index.js')).Player.isSupported())) {
+      console.log(`FAIL ${engine}: no WebGL2 here. This sample needs a GPU or a software GL, which a Linux machine without a display may not have`)
+      await browser.close(); server.close()
+      process.exit(1)
+    }
     const chosen = ids.slice(0, 3), nameIn = (id) => JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')).name
     await page.evaluate((f) => window.setFiles(f), files)
     const r = await page.evaluate((a) => window.runLoads(a), chosen)

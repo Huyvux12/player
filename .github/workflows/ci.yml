@@ -23,5 +23,18 @@ jobs:
       - run: npm run test:types
       - run: npx playwright-core install --with-deps chromium-headless-shell
       - run: npm run test:browser
-      - run: npx playwright-core install --with-deps firefox webkit
+  # Firefox and WebKit: they start WebGL2 only where they find a GPU or a software GL, and the Linux runner gives them
+  # neither. Tried here first without failing the run, until it has been seen to pass on this runner.
+  engines:
+    runs-on: macos-latest
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npx playwright-core install firefox webkit
       - run: npm run test:engines
