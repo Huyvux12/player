@@ -18,7 +18,7 @@ export { FORMAT, FORMAT_VERSION, LEGACY_FORMAT, PARAM_RANGES, defaultParams }
 export type { ActionId, Labels, ModelDef, ModelMeta, Params }
 
 /** this package's version */
-export const VERSION = '0.2.0'
+export const VERSION = '0.2.1'
 
 /** where a model comes from: the URL of its model.json, of the folder holding it, or of a .livliv package (relative URLs
  *  resolve against the page); a .livliv package itself (a File or Blob: a ZIP of the folder); or its files: a FileList /
