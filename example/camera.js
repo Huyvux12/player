@@ -58,6 +58,8 @@ export function cameraButton(button, player, status) {
     before ||= status.textContent
     button.disabled = true
     let asking = true  // the face model goes on downloading after a refusal: its progress is no news then
+    // nothing here ends a start that hangs (a model that never comes, a camera that never answers): at least say so
+    const slow = setTimeout(() => { if (asking) status.textContent = 'Taking long: a slow connection, or the camera is not answering. Reload the page to try again.' }, 30000)
     try {
       const { startFaceTracking } = await import('../dist/tracking.js')
       running = await startFaceTracking(player, {
@@ -66,8 +68,10 @@ export function cameraButton(button, player, status) {
         onProgress: (s) => { if (asking) status.textContent = s.step === 'download' ? `Face model ${Math.round(s.progress * 100)}%` : `${s.step}…` },
       })
       asking = false
+      clearTimeout(slow)
       status.textContent = trace ? 'Demo motion, no camera in use' : 'Camera on'
     } catch (e) {
+      clearTimeout(slow)
       asking = false
       status.textContent = before
       if (!NOTES[e.name]) console.error('Face tracking could not start:', e)

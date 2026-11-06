@@ -412,6 +412,24 @@ try {
     console.log(`${said ? 'ok  ' : 'FAIL'} example/demo.html: the context lost, the page says so`)
     await p.close()
   }
+  // a camera start that hangs (a face model that never comes): the page says so after a while, and the button stays as it was
+  {
+    const p = await browser.newPage()
+    await p.clock.install()
+    await p.route(/face_landmarker\.task|tasks-vision.*wasm|vision_wasm/, () => {})  // never answered
+    await p.goto(`http://127.0.0.1:${server.address().port}/example/demo.html`)
+    await p.clock.runFor(100)
+    const up = await p.waitForFunction(() => window.player?.model, null, { timeout: 30000, polling: 200 }).then(() => true, () => false)
+    const cam = up && await p.getByRole('button', { name: /camera/i }).first().click().then(() => true, () => false)
+    if (cam) await p.getByRole('button', { name: 'Turn on camera' }).click()
+    await new Promise((r) => setTimeout(r, 500))
+    await p.clock.runFor(31000)
+    const said = cam && await p.evaluate(() => document.getElementById('status').textContent)
+    const ok = /Taking long/.test(said || '')
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} example/demo.html: a camera start that hangs says so: "${String(said).slice(0, 110)}"`)
+    await p.close()
+  }
   // React under StrictMode, which mounts everything twice (its files come from a CDN: without a connection, not tested)
   {
     const p = await browser.newPage(), said = []
