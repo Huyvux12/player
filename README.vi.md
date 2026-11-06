@@ -34,9 +34,9 @@
 import { Player } from '@livliv/player'
 
 const player = new Player(document.querySelector('canvas'))
-await player.load('characters/k01/')   // a folder with model.json and textures/, or a .livliv file
+await player.load('characters/k01/')   // thư mục chứa model.json và textures/, hoặc file .livliv
 
-player.setExpression('smile')          // ids are in player.expressions
+player.setExpression('smile')          // các id có trong player.expressions
 player.act('nod')
 player.params.mouthOpen = 0.6          // 0..1
 ```
@@ -45,7 +45,7 @@ player.params.mouthOpen = 0.6          // 0..1
 
 ```js
 import { createSpeech } from '@livliv/player/voice'
-import { startFaceTracking } from '@livliv/player/tracking'   // needs @mediapipe/tasks-vision
+import { startFaceTracking } from '@livliv/player/tracking'   // cần @mediapipe/tasks-vision
 
 const speech = createSpeech(player)
 button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
@@ -57,7 +57,7 @@ VRM hay PNGTuber đều dùng chung một API:
 
 ```js
 import { BodyPlayer } from '@livliv/player/body'
-import { VrmBody } from '@livliv/player/vrm'    // needs three and @pixiv/three-vrm
+import { VrmBody } from '@livliv/player/vrm'    // cần three và @pixiv/three-vrm
 import { PngBody } from '@livliv/player/png'
 
 const vrm = new BodyPlayer(canvasA, new VrmBody())
@@ -67,7 +67,7 @@ await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 ```
 
 Toàn bộ API có trong [API.md](API.md) (tiếng Anh): các tùy chọn, tham số, biểu cảm và hành động, driver, nhân vật VRM và PNGTuber,
-giới hạn với file không đáng tin, gói model và phiên bản định dạng. Định dạng gói LivLiv (`.livliv`,
+giới hạn khi đọc file không đáng tin cậy, gói model và phiên bản định dạng. Định dạng gói LivLiv (`.livliv`,
 `model.json` v4) có trong [FORMAT.md](FORMAT.md), kèm JSON Schema trong [`schema/`](schema/); các gói xuất trước v4
 được mô tả trong [FORMAT-v3.md](FORMAT-v3.md) và vẫn phát được.
 
@@ -77,22 +77,22 @@ giới hạn với file không đáng tin, gói model và phiên bản định d
 
 `characters/` có 21 nhân vật, sẵn sàng để `load()`. Các nhân vật mang một dấu LivLiv nhỏ ở góc dưới bên phải, do
 trình phát vẽ lên. Các nhân vật này **không** thuộc phạm vi Giấy phép Apache. Hầu hết do LivLiv tạo ra: bạn được dùng miễn phí cho dự án cá nhân, phi thương mại kèm ghi công
-("Characters: LivLiv (livliv.ai)"); không được bán, dùng thương mại hay huấn luyện mô hình AI trên các nhân vật này. Nana là
+("Characters: LivLiv (livliv.ai)"); không được bán, dùng thương mại hay dùng các nhân vật này để huấn luyện mô hình AI. Nana là
 linh vật của LivLiv. Điều khoản có trong [characters/LICENSE.md](characters/LICENSE.md).
 
-Kujira, Kujira Q và Pen là tác phẩm của người khác: giấy phép và ghi công đó không áp dụng cho các nhân vật này. Nguồn,
-ghi công và điều khoản của họ có trong [characters/CREDITS.md](characters/CREDITS.md).
+Kujira, Kujira Q và Pen dựa trên tác phẩm của người khác: giấy phép và cách ghi công nêu trên không áp dụng cho các nhân vật này. Nguồn,
+ghi công và điều khoản của các nhân vật này có trong [characters/CREDITS.md](characters/CREDITS.md).
 
-Mỗi nhân vật còn có một `cover.webp` (512 x 768, khoảng 50 KB), là khung hình đầu tiên của nhân vật khi chưa có dấu. Hãy hiển thị ảnh này dưới canvas với
-`object-fit: contain` rồi làm nhân vật hiện dần lên trên nó, như [example/loading.js](example/loading.js) đã làm: trang có ngay
-một hình ảnh, và không có gì bị nhảy hình.
+Mỗi nhân vật còn có một `cover.webp` (512 x 768, khoảng 50 KB), là khung hình đầu tiên của nhân vật, không kèm dấu. Hãy đặt ảnh này phía sau canvas với
+`object-fit: contain` rồi cho nhân vật hiện dần lên trên nó, như [example/loading.js](example/loading.js) đã làm: trang có ngay
+một hình ảnh, và bố cục không bị giật.
 
-| id | name | id | name | id | name |
+| id | tên | id | tên | id | tên |
 |---|---|---|---|---|---|
 | `k01` | Sena | `d01` | Yui | `v01` | Aster |
 | `k02` | Elio | `d02` | Leo | `v03` | Mira |
 | `char06` | Aoi | `d03` | Nana | `v04` | Kai |
-| `char07` | Sora | `d03ft` | Nana (refined) | `v05` | Lilith |
+| `char07` | Sora | `d03ft` | Nana (bản tinh chỉnh) | `v05` | Lilith |
 | `s01` | Hana | `p01` | Kujira | `v06` | Usa |
 | `q02` | Mochi | `p02` | Kujira Q | `v07` | Stella |
 | `q03` | Kotaro | `p03` | Pen | `w01` | Max |
@@ -102,11 +102,11 @@ một hình ảnh, và không có gì bị nhảy hình.
 Bạn có thể đưa vào ảnh của một PNGTuber, hoặc một VRM (vẽ bằng three.js); hoặc tự tạo nhân vật của mình từ một
 ảnh trên [livliv.ai](https://livliv.ai).
 
-- **Một PNGTuber**: hai ảnh (miệng đóng, miệng mở), và thêm hai ảnh nhắm mắt nếu bạn có.
+- **Một PNGTuber**: hai ảnh (ngậm miệng, há miệng), và thêm hai ảnh nhắm mắt nếu bạn có.
 - **Một VRM**: từ VRoid Studio hoặc bất kỳ công cụ nào xuất VRM 0.x hay 1.0.
 - **Một model LivLiv**: tạo một model từ một ảnh trên [livliv.ai](https://livliv.ai), rồi tải gói model từ
   trang của nhân vật đó (**Model package**): một file `.livliv`. Đưa file đó vào `load()` nguyên như vậy (một URL, hoặc `File`
-  người dùng đã chọn), hoặc giải nén thành thư mục. Gói model nào thuộc gói miễn phí cũng mang dấu LivLiv, và trình phát sẽ vẽ dấu đó.
+  người dùng đã chọn), hoặc giải nén thành thư mục. Gói model thuộc tài khoản miễn phí (free plan) sẽ mang dấu LivLiv, và trình phát sẽ vẽ dấu đó.
 
 ## Về trình phát và các nhân vật
 
@@ -121,8 +121,8 @@ nhân vật của người khác ([ghi công](characters/CREDITS.md)). Nana bả
 các bộ phận đung đưa và keyform xoay đầu, được thêm bằng công cụ của chính LivLiv.
 
 `meta.author` và `meta.license` của một gói ghi lại ai đã tạo gói đó và với điều khoản nào: hãy giữ nguyên các trường này và tuân theo chúng. Khi bạn
-công bố công khai một nhân vật được tạo bằng LivLiv, hãy nói rõ nhân vật đó được tạo bằng AI, và đừng trình bày nó như được vẽ tay hay
-gắn xương thủ công.
+trình bày công khai một nhân vật được tạo bằng LivLiv, hãy nói rõ nhân vật đó được tạo bằng AI, và đừng trình bày nó như được vẽ tay hay
+rig thủ công.
 
 ## Nhúng không cần code
 
@@ -131,7 +131,7 @@ gắn xương thủ công.
   style="border:0;background:transparent"></iframe>
 ```
 
-Chính trang `/live/<id>` này có nền trong suốt và hoạt động như một OBS Browser Source.
+Chính trang `/live/<id>` này có nền trong suốt và dùng được làm Browser Source trong OBS.
 
 ## Phát triển
 
@@ -139,10 +139,10 @@ Chính trang `/live/<id>` này có nền trong suốt và hoạt động như m�
 git clone https://github.com/livliv-dev/player
 cd player
 npm install
-npm run check          # types
-npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ and types/
-npm test               # unit and fuzz tests (Node 22.18 or newer, no browser)
-npm run test:browser   # every featured character drawn in headless Chromium; once: npx playwright-core install chromium-headless-shell
+npm run check          # kiểm tra kiểu
+npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ và types/
+npm test               # unit test và fuzz test (Node 22.18 trở lên, không cần trình duyệt)
+npm run test:browser   # vẽ mọi nhân vật nổi bật trong headless Chromium; chạy một lần trước: npx playwright-core install chromium-headless-shell
 ```
 
 `src/runtime/` là code renderer và chuyển động mà livliv.ai đang chạy; repository này được xuất bản từ code đó. Xem
@@ -150,7 +150,7 @@ npm run test:browser   # every featured character drawn in headless Chromium; on
 
 ## Trình duyệt hỗ trợ
 
-WebGL2 và ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+. Đã kiểm tra trên các trình duyệt desktop hiện tại, chưa kiểm tra trên điện thoại.
+WebGL2 và ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+. Đã kiểm tra trên các phiên bản mới nhất của trình duyệt desktop, chưa kiểm tra trên điện thoại.
 
 ## Giấy phép
 
