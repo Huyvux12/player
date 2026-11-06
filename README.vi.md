@@ -22,10 +22,10 @@
 ## Thử ngay
 
 - **Trực tuyến**: các ví dụ chạy trên [livliv-dev.github.io/player](https://livliv-dev.github.io/player/).
-- **Tại đây**: `npm install && npm run build`, phục vụ thư mục này bằng bất kỳ static server nào rồi mở `/example/demo.html`
+- **Tại đây**: `npm install && npm run build`, chạy thư mục này bằng bất kỳ static server nào rồi mở `/example/demo.html`
   (biểu cảm, hành động, microphone, camera; `?model=../characters/<id>/` chọn nhân vật khác).
-  `/example/png.html` và `/example/vrm.html` cho thấy một PNGTuber và một VRM.
-- **Trên livliv.ai**: trang của mỗi nhân vật ở đó phát nhân vật bằng cùng trình phát này. Bắt đầu tại
+  `/example/png.html` và `/example/vrm.html` là ví dụ về PNGTuber và VRM.
+- **Trên livliv.ai**: trang của từng nhân vật ở đó cũng dùng chính bộ renderer này để chạy nhân vật. Bắt đầu tại
   [livliv.ai/discover](https://livliv.ai/discover).
 
 ## Dùng trong trang của bạn
@@ -66,7 +66,7 @@ const png = new BodyPlayer(canvasB, new PngBody())
 await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 ```
 
-Toàn bộ API có trong [API.md](API.md): các tùy chọn, tham số, biểu cảm và hành động, driver, nhân vật VRM và PNGTuber,
+Toàn bộ API có trong [API.md](API.md) (tiếng Anh): các tùy chọn, tham số, biểu cảm và hành động, driver, nhân vật VRM và PNGTuber,
 giới hạn với file không đáng tin, gói model và phiên bản định dạng. Định dạng gói LivLiv (`.livliv`,
 `model.json` v4) có trong [FORMAT.md](FORMAT.md), kèm JSON Schema trong [`schema/`](schema/); các gói xuất trước v4
 được mô tả trong [FORMAT-v3.md](FORMAT-v3.md) và vẫn phát được.
@@ -104,26 +104,25 @@ Bạn có thể đưa vào ảnh của một PNGTuber, hoặc một VRM (vẽ b�
 
 - **Một PNGTuber**: hai ảnh (miệng đóng, miệng mở), và thêm hai ảnh nhắm mắt nếu bạn có.
 - **Một VRM**: từ VRoid Studio hoặc bất kỳ công cụ nào xuất VRM 0.x hay 1.0.
-- **Một model LivLiv**: tạo một model từ một ảnh trên [livliv.ai](https://livliv.ai), rồi tải gói model của model đó từ
-  trang của nhân vật (**Model package**): một file `.livliv`. Đưa file đó vào `load()` nguyên như vậy (một URL, hoặc `File`
-  người dùng đã chọn), hoặc giải nén thành thư mục. Các gói trên gói miễn phí mang dấu LivLiv, và trình phát sẽ vẽ dấu đó.
+- **Một model LivLiv**: tạo một model từ một ảnh trên [livliv.ai](https://livliv.ai), rồi tải gói model từ
+  trang của nhân vật đó (**Model package**): một file `.livliv`. Đưa file đó vào `load()` nguyên như vậy (một URL, hoặc `File`
+  người dùng đã chọn), hoặc giải nén thành thư mục. Gói model nào thuộc gói miễn phí cũng mang dấu LivLiv, và trình phát sẽ vẽ dấu đó.
 
 ## Về trình phát và các nhân vật
 
 LivLiv Player và định dạng `.livliv` là sản phẩm của chính LivLiv. Chúng không dùng phần mềm Live2D hay Cubism SDK và không
 đọc file `.moc3` hay `.cmo3`. "Live2D" là nhãn hiệu của Live2D Inc.; LivLiv không liên kết với công ty đó.
 
-Việc tạo nhân vật trên livliv.ai có dùng AI. Bản thân trình phát chỉ phát: nó không gọi dịch vụ AI nào và chỉ đọc các file
-bạn chỉ tới. Theo dõi khuôn mặt chạy MediaPipe của Google trong trình duyệt, và hình ảnh camera vẫn ở trên thiết bị; API.md có
-chi tiết về mạng.
+Việc tạo nhân vật trên livliv.ai có dùng AI. Bản thân trình phát chỉ phát: nó không gọi dịch vụ AI nào và chỉ đọc các file bạn chỉ định.
+Theo dõi khuôn mặt chạy MediaPipe của Google trong trình duyệt, và hình ảnh camera không rời khỏi thiết bị; chi tiết về kết nối mạng có trong API.md.
 
 Các nhân vật nổi bật trong repository này cũng được tạo trên LivLiv, cũng bằng AI; Kujira, Kujira Q và Pen phỏng theo
 nhân vật của người khác ([ghi công](characters/CREDITS.md)). Nana bản tinh chỉnh (`d03ft`) còn có thêm
 các bộ phận đung đưa và keyform xoay đầu, được thêm bằng công cụ của chính LivLiv.
 
 `meta.author` và `meta.license` của một gói ghi lại ai đã tạo gói đó và với điều khoản nào: hãy giữ nguyên các trường này và tuân theo chúng. Khi bạn
-cho công chúng xem một nhân vật được tạo bằng LivLiv, hãy nói rằng nhân vật đó được tạo bằng AI, và đừng trình bày nó như được vẽ tay hay
-rig tay.
+công bố công khai một nhân vật được tạo bằng LivLiv, hãy nói rõ nhân vật đó được tạo bằng AI, và đừng trình bày nó như được vẽ tay hay
+gắn xương thủ công.
 
 ## Nhúng không cần code
 
@@ -132,7 +131,7 @@ rig tay.
   style="border:0;background:transparent"></iframe>
 ```
 
-Trang `/live/<id>` tương tự có nền trong suốt và hoạt động như một OBS Browser Source.
+Chính trang `/live/<id>` này có nền trong suốt và hoạt động như một OBS Browser Source.
 
 ## Phát triển
 
@@ -160,4 +159,4 @@ giấy phép riêng, [characters/LICENSE.md](characters/LICENSE.md). Không gi�
 
 ## Cảm ơn
 
-Cảm ơn 上善无形, ZipZipPipe và 贱兔死顺盖, những người mà các nhân vật Kujira, Kujira Q và Pen dựa trên: xem [characters/CREDITS.md](characters/CREDITS.md).
+Cảm ơn 上善无形, ZipZipPipe và 贱兔死顺盖 — các tác giả của nhân vật gốc mà Kujira, Kujira Q và Pen dựa theo: xem chi tiết tại [characters/CREDITS.md](characters/CREDITS.md).
