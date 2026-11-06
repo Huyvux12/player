@@ -10,7 +10,7 @@
   さまざまなスタイルの厳選キャラクター 21 体を同梱。すぐに使えます。
 </p>
 
-<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <b>日本語</b></p>
+<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <b>日本語</b> · <a href="README.vi.md">Tiếng Việt</a></p>
 
 <p align="center"><img src="media/demo.gif" alt="厳選キャラクターが呼吸し、まばたきし、振り向き、話す様子" width="720"></p>
 
