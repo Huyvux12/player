@@ -31,8 +31,12 @@
 
 ## 在自己的页面里用
 
+```sh
+npm install @livliv-dev/player
+```
+
 ```js
-import { Player } from '@livliv/player'
+import { Player } from '@livliv-dev/player'
 
 const player = new Player(document.querySelector('canvas'))
 await player.load('characters/k01/')   // 含 model.json 和 textures/ 的文件夹，或一个 .livliv 文件
@@ -45,8 +49,8 @@ player.params.mouthOpen = 0.6          // 0..1
 口型同步和面捕：
 
 ```js
-import { createSpeech } from '@livliv/player/voice'
-import { startFaceTracking } from '@livliv/player/tracking'   // 需要 @mediapipe/tasks-vision
+import { createSpeech } from '@livliv-dev/player/voice'
+import { startFaceTracking } from '@livliv-dev/player/tracking'   // 需要 @mediapipe/tasks-vision
 
 const speech = createSpeech(player)
 button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
@@ -57,9 +61,9 @@ await startFaceTracking(player)
 VRM 和 PNGTuber 用同一套接口：
 
 ```js
-import { BodyPlayer } from '@livliv/player/body'
-import { VrmBody } from '@livliv/player/vrm'    // 需要 three 和 @pixiv/three-vrm
-import { PngBody } from '@livliv/player/png'
+import { BodyPlayer } from '@livliv-dev/player/body'
+import { VrmBody } from '@livliv-dev/player/vrm'    // 需要 three 和 @pixiv/three-vrm
+import { PngBody } from '@livliv-dev/player/png'
 
 const vrm = new BodyPlayer(canvasA, new VrmBody())
 await vrm.load('/avatars/me.vrm')
@@ -69,7 +73,7 @@ await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 
 完整的 API 见 [API.md](API.md)（英文）：选项、参数、表情和动作、驱动、VRM 和 PNGTuber、不可信文件的上限、模型包和格式版本。LivLiv 模型包格式（`.livliv`、`model.json` v4）见 [FORMAT.md](FORMAT.md)，JSON Schema 在 [`schema/`](schema/)；v4 之前导出的模型包见 [FORMAT-v3.md](FORMAT-v3.md)，照样能播放。
 
-> 还没有发布到 npm：请从这个仓库构建，引入 `dist/index.js`。
+> npm 包里只有播放器。精选角色在这个仓库的 [`characters/`](characters/) 里，把要用的角色连同许可一起复制到你的页面旁边。
 
 ## 精选角色
 

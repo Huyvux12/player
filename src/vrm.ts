@@ -1,4 +1,4 @@
-// @livliv/player/vrm: a VRM (the open 3D avatar format: VRoid and others) on a BodyPlayer (@livliv/player/body), drawn with
+// @livliv-dev/player/vrm: a VRM (the open 3D avatar format: VRoid and others) on a BodyPlayer (@livliv-dev/player/body), drawn with
 // three.js and @pixiv/three-vrm, which the page installs (optional peer dependencies) and which load only here. The
 // shared params become its pose: the head and neck turn and tilt (angleX / Y / Z), the spine sways (bodyX / Z), the
 // eyes blink (eyeLOpen / ROpen) and look (eyeBallX / Y), the mouth takes the visemes (mouthOpen with its vowel: aa open,

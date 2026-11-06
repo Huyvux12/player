@@ -1,4 +1,4 @@
-// @livliv/player/tracking: the character follows a face in the webcam (MediaPipe Face Landmarker, in the browser; camera
+// @livliv-dev/player/tracking: the character follows a face in the webcam (MediaPipe Face Landmarker, in the browser; camera
 // images stay on the device, though MediaPipe sends Google usage statistics while it runs). A separate import: it needs
 // the @mediapipe/tasks-vision package and downloads ~8 MB of model the first time (the wasm runtime and the face model;
 // cached by the browser after that).

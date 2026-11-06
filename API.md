@@ -1,14 +1,14 @@
-# @livliv/player API
+# @livliv-dev/player API
 
 A lightweight 2.5D character player for the web. `Player` animates a LivLiv model (a `.livliv` package, or its folder:
 `model.json` and `textures/`) on a `<canvas>` with WebGL2; VRM and PNGTuber characters play on the same API through
-`@livliv/player/body`. The core has no dependencies (~75 KB minified, ~30 KB gzipped, the renderer and the idle motion included).
+`@livliv-dev/player/body`. The core has no dependencies (~75 KB minified, ~30 KB gzipped, the renderer and the idle motion included).
 Lip sync and face tracking are separate imports, so you only ship them if you use them.
 
-> Not on npm yet. Build it from this repository (see [Building](#building)) and import `dist/index.js`.
+> Install it with `npm install @livliv-dev/player`, or build it from this repository (see [Building](#building)).
 
 ```js
-import { Player } from '@livliv/player'
+import { Player } from '@livliv-dev/player'
 
 const player = new Player(document.querySelector('canvas'))
 await player.load('/avatars/sena.livliv')      // the package as downloaded, or its folder unzipped: '/avatars/sena/'
@@ -111,8 +111,8 @@ try {
 }
 ```
 
-**Errors.** What a load rejects with for a reason of its own is a `LivLivError` (from `@livliv/player` and
-`@livliv/player/body`): `code` says what went wrong and `status` the HTTP status. The message is for people and can change.
+**Errors.** What a load rejects with for a reason of its own is a `LivLivError` (from `@livliv-dev/player` and
+`@livliv-dev/player/body`): `code` says what went wrong and `status` the HTTP status. The message is for people and can change.
 `new Player()` throws the same class. A camera or microphone keeps the browser's own errors.
 
 | `code` | |
@@ -252,13 +252,13 @@ the way livliv.ai shows it, so screenshots and recordings of the canvas carry it
 The mark is part of the package's licence (`meta.license`), not a lock: the player draws what the package asks for and
 has no switch to hide it. A package without it is exported from a paid plan.
 
-## Lip sync: `@livliv/player/voice`
+## Lip sync: `@livliv-dev/player/voice`
 
 The mouth follows a voice: its loudness, and the vowel's shape where the model has round / wide mouth frames. Without
 face tracking the voice also moves the head, brows and eyes a little, the way people move while they talk.
 
 ```js
-import { createSpeech, startLipSync } from '@livliv/player/voice'
+import { createSpeech, startLipSync } from '@livliv-dev/player/voice'
 
 // speech clips (TTS replies): played back to back, the mouth following each one exactly
 const speech = createSpeech(player)
@@ -277,7 +277,7 @@ syllables, default false). `startLipSync` returns `{ level, gain, stop() }`. A s
 yours: `stop()` leaves it playing. Browsers let an `<audio>` element be routed through Web Audio only once, so after
 `startLipSync(player, el)` that element always plays through the player's audio context (it still plays normally).
 
-## Face tracking: `@livliv/player/tracking`
+## Face tracking: `@livliv-dev/player/tracking`
 
 The character follows a face in the webcam, with MediaPipe Face Landmarker running in the browser: camera images stay
 on the device. Needs the `@mediapipe/tasks-vision` package (1.1.1) and downloads ~8 MB the first time (the wasm runtime
@@ -285,7 +285,7 @@ and the face model; cached after that). MediaPipe itself, as Google ships it, al
 (`odml.pa.googleapis.com`) while it runs.
 
 ```js
-import { preloadFaceModel, startFaceTracking } from '@livliv/player/tracking'
+import { preloadFaceModel, startFaceTracking } from '@livliv-dev/player/tracking'
 
 cameraButton.onpointerenter = () => preloadFaceModel()      // optional: start the download early
 const tracking = await startFaceTracking(player, {
@@ -367,16 +367,16 @@ remove()
 `move` (`{ x, y, s }`: move / scale the picture this frame). `order` sorts drivers: face tracking -10, yours 0,
 lip sync 10. `dispose()` is called when a driver is removed.
 
-## Characters that aren't LivLiv models: `@livliv/player/body`
+## Characters that aren't LivLiv models: `@livliv-dev/player/body`
 
 A `BodyPlayer` plays a character a `Body` draws, with Player's API where it applies: `load()`, `params`, the idle
 motion, `setExpression()`, `act()`, `lookAt()`, `blink()`, `use()` and the loop. Lip sync and face tracking work on it
 as on a Player. Two bodies come with the package:
 
 ```js
-import { BodyPlayer } from '@livliv/player/body'
-import { PngBody } from '@livliv/player/png'
-import { VrmBody } from '@livliv/player/vrm'    // needs three and @pixiv/three-vrm
+import { BodyPlayer } from '@livliv-dev/player/body'
+import { PngBody } from '@livliv-dev/player/png'
+import { VrmBody } from '@livliv-dev/player/vrm'    // needs three and @pixiv/three-vrm
 
 const png = new BodyPlayer(canvasA, new PngBody())
 await png.load({ closed: 'me-closed.png', open: 'me-open.png', blink: 'me-blink.png' })  // name -> URL or Blob
@@ -385,11 +385,11 @@ const vrm = new BodyPlayer(canvasB, new VrmBody())
 await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
 ```
 
-- **PNGTuber** (`@livliv/player/png`): pictures named `closed` and `open` (the mouth), optionally `blink` and
+- **PNGTuber** (`@livliv-dev/player/png`): pictures named `closed` and `open` (the mouth), optionally `blink` and
   `blink-open` (any image the browser reads, 8192 px a side at most). One is shown at a time: the open one while the
   voice is loud, the blink ones when the eyes close. The picture sways, tilts and breathes with the head and body and
   hops with the voice; there are no expressions but the smile param, and no turn beyond that sway. `name.txt` names it.
-- **VRM** (`@livliv/player/vrm`): VRM 0.x and 1.0, drawn with [three.js](https://threejs.org) and
+- **VRM** (`@livliv-dev/player/vrm`): VRM 0.x and 1.0, drawn with [three.js](https://threejs.org) and
   [three-vrm](https://github.com/pixiv/three-vrm), which you install (`npm install three @pixiv/three-vrm`; three.js 0.170
   or newer, played here on 0.170, 0.186 and 0.187 with three-vrm 3.5.5; optional peer dependencies, so the rest of the
   package does not need them). Files from VRoid Studio and UniVRM play. So does a real file from the VRM add-on for Blender; a fresh export from Blender hasn't been tested, and [issue #1](https://github.com/livliv-dev/player/issues/1) is still open. The head and neck turn, the spine sways, the eyes
@@ -435,7 +435,7 @@ an error and the model before stays. Before anything reaches the GPU:
 - A name, an expression's label and the mark's text are the author's text: show them with `textContent`, not as HTML.
 
 These limits are `LIMITS` in `src/runtime/format.ts`; the largest model LivLiv has built uses a tenth of them or less.
-A VRM is looked through before three.js's glTF loader parses it (`VRM_LIMITS` in `@livliv/player/vrm`): a binary glTF, with
+A VRM is looked through before three.js's glTF loader parses it (`VRM_LIMITS` in `@livliv-dev/player/vrm`): a binary glTF, with
 nothing outside itself (a file naming an outside URL is refused, so it cannot make the page fetch anything), 32 MB of
 JSON, 16 777 216 vertices, pictures of 8192 px a side and 536 870 912 pixels in all, read from their headers before they are
 decoded. Security reports: [SECURITY.md](SECURITY.md).

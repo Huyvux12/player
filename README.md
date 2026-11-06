@@ -30,8 +30,12 @@
 
 ## Use it in your page
 
+```sh
+npm install @livliv-dev/player
+```
+
 ```js
-import { Player } from '@livliv/player'
+import { Player } from '@livliv-dev/player'
 
 const player = new Player(document.querySelector('canvas'))
 await player.load('characters/k01/')   // a folder with model.json and textures/, or a .livliv file
@@ -44,8 +48,8 @@ player.params.mouthOpen = 0.6          // 0..1
 Lip sync and face tracking:
 
 ```js
-import { createSpeech } from '@livliv/player/voice'
-import { startFaceTracking } from '@livliv/player/tracking'   // needs @mediapipe/tasks-vision
+import { createSpeech } from '@livliv-dev/player/voice'
+import { startFaceTracking } from '@livliv-dev/player/tracking'   // needs @mediapipe/tasks-vision
 
 const speech = createSpeech(player)
 button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
@@ -56,9 +60,9 @@ await startFaceTracking(player)
 A VRM or a PNGTuber, on the same API:
 
 ```js
-import { BodyPlayer } from '@livliv/player/body'
-import { VrmBody } from '@livliv/player/vrm'    // needs three and @pixiv/three-vrm
-import { PngBody } from '@livliv/player/png'
+import { BodyPlayer } from '@livliv-dev/player/body'
+import { VrmBody } from '@livliv-dev/player/vrm'    // needs three and @pixiv/three-vrm
+import { PngBody } from '@livliv-dev/player/png'
 
 const vrm = new BodyPlayer(canvasA, new VrmBody())
 await vrm.load('/avatars/me.vrm')
@@ -71,7 +75,8 @@ the limits on untrusted files, the model package and the format version. The Liv
 `model.json` v4) is in [FORMAT.md](FORMAT.md), with a JSON Schema in [`schema/`](schema/); packages exported before v4
 are described in [FORMAT-v3.md](FORMAT-v3.md) and still play.
 
-> Not on npm yet: build it from this repository and import `dist/index.js`.
+> The npm package is the player alone. The featured characters are in this repository's [`characters/`](characters/): copy
+> the ones you use next to your page, with their licence.
 
 ## Featured characters
 

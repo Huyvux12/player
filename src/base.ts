@@ -59,7 +59,7 @@ export interface Driver {
   dispose?(): void
 }
 
-/** what a driver, the lip sync and the face tracking need of a player: a Player, or a BodyPlayer (@livliv/player/body) */
+/** what a driver, the lip sync and the face tracking need of a player: a Player, or a BodyPlayer (@livliv-dev/player/body) */
 export interface Host {
   /** adds a driver; returns a function that removes it */
   use(driver: Driver): () => void

@@ -29,8 +29,12 @@
 
 ## 自分のページで使う
 
+```sh
+npm install @livliv-dev/player
+```
+
 ```js
-import { Player } from '@livliv/player'
+import { Player } from '@livliv-dev/player'
 
 const player = new Player(document.querySelector('canvas'))
 await player.load('characters/k01/')   // model.json と textures/ のあるフォルダ、または .livliv ファイル
@@ -43,8 +47,8 @@ player.params.mouthOpen = 0.6          // 0..1
 リップシンクとフェイストラッキング：
 
 ```js
-import { createSpeech } from '@livliv/player/voice'
-import { startFaceTracking } from '@livliv/player/tracking'   // @mediapipe/tasks-vision が必要
+import { createSpeech } from '@livliv-dev/player/voice'
+import { startFaceTracking } from '@livliv-dev/player/tracking'   // @mediapipe/tasks-vision が必要
 
 const speech = createSpeech(player)
 button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
@@ -55,9 +59,9 @@ await startFaceTracking(player)
 VRM や PNGTuber も同じ API で：
 
 ```js
-import { BodyPlayer } from '@livliv/player/body'
-import { VrmBody } from '@livliv/player/vrm'    // three と @pixiv/three-vrm が必要
-import { PngBody } from '@livliv/player/png'
+import { BodyPlayer } from '@livliv-dev/player/body'
+import { VrmBody } from '@livliv-dev/player/vrm'    // three と @pixiv/three-vrm が必要
+import { PngBody } from '@livliv-dev/player/png'
 
 const vrm = new BodyPlayer(canvasA, new VrmBody())
 await vrm.load('/avatars/me.vrm')
@@ -67,7 +71,7 @@ await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
 
 API の全体は [API.md](API.md)（英語）にあります：オプション、パラメーター、表情とアクション、ドライバー、VRM と PNGTuber、信頼できないファイルの上限、モデルパッケージ、フォーマットのバージョン。LivLiv のパッケージ形式（`.livliv`、`model.json` v4）は [FORMAT.md](FORMAT.md)、JSON Schema は [`schema/`](schema/) にあります。v4 より前に書き出したパッケージは [FORMAT-v3.md](FORMAT-v3.md) のとおりで、そのまま再生できます。
 
-> まだ npm には公開していません。このリポジトリからビルドして `dist/index.js` をインポートしてください。
+> npm パッケージに入っているのはプレイヤーだけです。厳選キャラクターはこのリポジトリの [`characters/`](characters/) にあります。使うキャラクターをライセンスと一緒にページのそばにコピーしてください。
 
 ## 厳選キャラクター
 

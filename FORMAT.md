@@ -2,7 +2,7 @@
 
 A LivLiv model is a 2D character cut into layers, with the anchors and rig settings a player needs to move it: head
 turns, blinks, gaze, brows, lip sync, breathing, hair that swings, and expressions. This document describes the package
-that [livliv.ai](https://livliv.ai) exports and that LivLiv Player (`@livliv/player`) and LivLiv Stage read.
+that [livliv.ai](https://livliv.ai) exports and that LivLiv Player (`@livliv-dev/player`) and LivLiv Stage read.
 
 - JSON Schema: [`schema/livliv-model-v4.json`](schema/livliv-model-v4.json) (`model.json`) and
   [`schema/livliv-keyforms-v1.json`](schema/livliv-keyforms-v1.json) (`keyforms.json`)

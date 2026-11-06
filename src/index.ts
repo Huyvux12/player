@@ -1,7 +1,7 @@
-// @livliv/player: plays a LivLiv model (an exported model package: model.json and textures/) on a canvas, outside
+// @livliv-dev/player: plays a LivLiv model (an exported model package: model.json and textures/) on a canvas, outside
 // livliv.ai. The renderer is livliv.ai's own (src/runtime/puppet.ts); this wraps it in a small API: load, a frame
 // loop with the idle motion, params, expressions, actions, the corner mark the package carries, and drivers. Face
-// tracking and lip sync are separate imports ('@livliv/player/tracking', '@livliv/player/voice'), so the core stays small.
+// tracking and lip sync are separate imports ('@livliv-dev/player/tracking', '@livliv-dev/player/voice'), so the core stays small.
 import { langOf, pickLabel, readModel, type Labels, type ModelMeta } from './runtime/format'
 import { FORMAT, FORMAT_VERSION, LEGACY_FORMAT, PARAM_RANGES, Puppet, defaultParams, loadBlob, type KeyformFile, type ModelDef, type Params } from './runtime/puppet'
 import { LivLivError, PlayerBase, aborted, contextGone, readBody, type LivLivErrorCode, type LoadJob, type LoadOptions, type PlayerOptions } from './base'
@@ -183,7 +183,7 @@ function explain(e: unknown, where: string): unknown {
 }
 
 /** a file a Player cannot take but a BodyPlayer can: the words that say so */
-const vrmHere = () => new LivLivError('not-a-model', 'LivLiv: this is a VRM or glTF file, and a Player plays LivLiv models: use a BodyPlayer with VrmBody (@livliv/player/vrm)')
+const vrmHere = () => new LivLivError('not-a-model', 'LivLiv: this is a VRM or glTF file, and a Player plays LivLiv models: use a BodyPlayer with VrmBody (@livliv-dev/player/vrm)')
 const isGlb = async (b: Blob) => { const d = new DataView(await b.slice(0, 4).arrayBuffer()); return d.byteLength === 4 && d.getUint32(0, true) === 0x46546c67 }
 
 /** a .livliv package from a URL, as a Blob. One file is one connection to lose where a folder has dozens, and a dropped one

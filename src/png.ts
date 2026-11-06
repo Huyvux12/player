@@ -1,4 +1,4 @@
-// @livliv/player/png: a PNGTuber on a BodyPlayer (@livliv/player/body). A few pictures of the character, one shown at a
+// @livliv-dev/player/png: a PNGTuber on a BodyPlayer (@livliv-dev/player/body). A few pictures of the character, one shown at a
 // time: the mouth closed or open (the voice, the microphone), the eyes closed when it blinks (optional, and with the
 // mouth open too). The picture sways with the head, tilts, breathes and hops with the voice, standing on the bottom of
 // the canvas. Files by name (any image the browser decodes): closed, open, blink, blink-open, and name.txt.

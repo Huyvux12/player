@@ -1,4 +1,4 @@
-// @livliv/player/voice: lip sync. The mouth follows a voice (loudness, and the vowel's shape where the model has round /
+// @livliv-dev/player/voice: lip sync. The mouth follows a voice (loudness, and the vowel's shape where the model has round /
 // wide mouths), and without face tracking the voice also moves the head, brows and eyes a little, the way people move
 // while they talk. Two ways in:
 //  - startLipSync: live audio (the microphone, a call's MediaStream, or an <audio> / <video> element the page plays)
