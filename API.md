@@ -67,10 +67,10 @@ new Player(canvas: HTMLCanvasElement, options?: PlayerOptions)
 `new Player()` throws where WebGL2 cannot start: the browser has none or has it turned off, or the canvas already draws
 in 2D. `Player.isSupported()` asks first, so a page can say so or show a picture instead.
 
-### `load(source): Promise<ModelInfo>`
+### `load(source, options?): Promise<ModelInfo>`
 
-Loads a model and shows it in place of the one before (loads run one after another; a failed load keeps the old one).
-`source` is one of:
+Loads a model and shows it in place of the one before. A load that fails keeps the old one, whatever goes wrong. `source`
+is one of:
 
 - a URL (string or `URL`) of a `.livliv` (or `.zip`) package, of `model.json`, or of its folder; relative URLs resolve
   against the page. A query string (`?token=…`) is sent with every file.
@@ -86,6 +86,49 @@ input.onchange = () => player.load(input.files)
 
 A package is checked before anything is decoded: a newer format than this player reads, a feature it does not have,
 paths outside the package, an encrypted or oversized ZIP are refused with an error saying so.
+
+| option | |
+|---|---|
+| `signal` | an `AbortSignal` that calls the load off: it rejects with an `AbortError` (or the signal's own reason) and the character before stays |
+| `onProgress` | called with `{ step: 'download', progress }` as the files come in (0..1, always rising; bytes for a package, images for a folder; where the size is not known, 0 and then 1), then once with `{ step: 'build' }` as the character goes in |
+| `poster` | the URL of a picture to show until the first frame (a featured character's `cover.webp`). It is the canvas's CSS background, so it fits the canvas's box, adds nothing to the page, and the canvas's own background comes back after. Only while the canvas shows nothing yet: over a character, that one stays until the next is ready |
+
+**A new `load()` replaces one still running**, so the last one asked for is the one that plays, and the download before it
+stops (Safari may keep the connection open). The one replaced rejects with an `AbortError`. Nobody has to catch it: a
+page that only calls `player.load(a); player.load(b)` sees nothing in the console, while a real failure is reported as
+any uncaught rejection is. A signal that is already aborted rejects at once and leaves the running load alone. The last
+moment, when the model goes in, cannot be interrupted and takes a few milliseconds to a few hundred: a load that has
+reached it finishes.
+
+```js
+const stop = new AbortController()
+try {
+  await player.load(url, { signal: stop.signal, poster: 'cover.webp', onProgress: (p) => { if (p.step === 'download') bar.value = p.progress } })
+} catch (e) {
+  if (e.name === 'AbortError') return                  // replaced by a newer load, or called off
+  if (e.code === 'unreachable') say('Check the connection')
+  else say(e.message)
+}
+```
+
+**Errors.** What a load rejects with for a reason of its own is a `LivLivError` (from `@livliv/player` and
+`@livliv/player/body`): `code` says what went wrong and `status` the HTTP status. The message is for people and can change.
+`new Player()` throws the same class. A camera or microphone keeps the browser's own errors.
+
+| `code` | |
+|---|---|
+| `no-webgl` | this browser or canvas gives no WebGL2 |
+| `canvas-in-use` | the canvas already draws in a way this character cannot (a PNGTuber on a WebGL canvas) |
+| `unreachable` | the file did not come: no connection, a connection that dropped, or another origin without a CORS header |
+| `http` | the server said no (`status`) |
+| `not-a-model` | not a model at all, or not one for this player (a VRM handed to a `Player`) |
+| `invalid` | a model, but something in it is wrong or damaged |
+| `too-large` | over this player's limits, or the GPU's memory |
+| `newer-format` | written for a newer player |
+| `missing-feature` | needs something this page or player does not have |
+| `missing-file` | a file it names is not among the files |
+| `context-lost` | the canvas's WebGL context is gone, see [below](#when-the-context-is-lost) |
+| `released` | the canvas gave its context up with `dispose({ release: true })`: use a new canvas |
 
 `ModelInfo`:
 
@@ -119,14 +162,15 @@ top; it never writes them back, so a value you set stays until you change it.
 
 With `idle` on, the idle motion sets the head, eyes, gaze, brows, body and breath, so your values for those count
 only with `idle` off (or use a [driver](#drivers) to add to them). `mouthOpen`, `vowel` and `smile` are always yours.
-`PARAM_RANGES` and `defaultParams()` are exported.
+`PARAM_RANGES` and `defaultParams()` are exported. Whoever sets them, the pose stays in these ranges, and a value that is
+not a number counts as the default.
 
 ### Expressions and actions
 
 - `setExpression(id, weight = 1): boolean`: eases over to that expression (ids from `expressions`; `null` = neutral).
   Returns false for an id the model doesn't have.
-- `act(action)`: a short move over whatever else drives the character: `'nod'`, `'shake'`, `'tilt'`, `'hop'`,
-  `'shy'`; `'away'` toggles a dozing pose.
+- `act(action)`: a short move over whatever else drives the character: `'nod'`, `'shake'`, `'tilt'`, `'hop'`, `'shy'`.
+- `setAway(on)`: dozes (eyes closed, head down, a slow breath, expressions hidden), easing in, until `setAway(false)`.
 - `lookAt(x, y)`: looks toward a point, each -1..1 from the canvas center (y up), and keeps looking there instead
   of following the pointer; `lookAt(null)` goes back to the pointer. Needs `idle`.
 - `blink()`: blinks now (with `idle`).
@@ -137,12 +181,63 @@ only with `idle` off (or use a [driver](#drivers) to add to them). `mouthOpen`, 
   center, `head: true` frames the head instead of the whole drawing (avatars, chat bubbles).
 - `play()`, `pause()`, `playing`. The loop also skips drawing while the canvas is scrolled out of view.
 - `resize()`: draws now at the canvas's current size. Only needed after resizing a paused player.
-- `snapshot()`: the current frame as a PNG data URL (with the mark).
-- `dispose()`: stops, removes drivers, frees the character's GPU memory. A `load()` still running rejects, and a camera or
-  microphone still starting (`startFaceTracking`, `startLipSync`) is let go as soon as it opens. The canvas keeps its WebGL
-  context and can take a new `Player` afterwards. A browser allows about 16 contexts at once and drops the oldest past that,
-  so a page that shows many characters over time should reuse its canvases.
-- `puppet`: the renderer underneath, for what this API does not cover. Its fields can change between versions.
+- `maxPixelRatio`: as the option, and it can be changed at any time.
+- `snapshot()`: the pose as it is now, as a PNG data URL (with the mark).
+- `canvasToModel(x, y)`: a point on the canvas (CSS px from its top left) in the model's own px, as the last frame drew it.
+- `poke(x, y, strength = 1)`: a flick at a point in the model's px: the swinging pieces near it are thrown (a tap on a twin
+  tail). Returns how many it moved: none on a model without any.
+- `dispose({ release })`: stops, removes drivers, frees the character's GPU memory. A `load()` still running rejects, and a
+  camera or microphone still starting (`startFaceTracking`, `startLipSync`) is let go as soon as it opens.
+
+### Canvases and contexts
+
+A browser allows about 16 WebGL contexts on a page and drops the oldest past that, which can be a character still showing.
+So a page where characters come and go has two ways to stay under it:
+
+- **Reuse canvases.** After `dispose()` the canvas keeps its context and can take a new `Player`. This is the only way that
+  works everywhere: Safari does not get the room back from a released context.
+- **Release what leaves.** `dispose({ release: true })` gives the context up, for a canvas leaving the page. Measured here, 40
+  players came and went beside one that stayed, and it stayed (Chromium, Firefox). The canvas is spent after that: a new
+  player on it throws `released`, unless it is made at once, in the same task, as a framework's unmount and mount is.
+
+In **React**, this is the whole of it, and it is right under StrictMode, which mounts everything twice ([example/react.html](example/react.html)):
+
+```jsx
+function Character({ source }) {
+  const canvas = useRef(null), player = useRef(null)
+  useEffect(() => {
+    const p = player.current = new Player(canvas.current)
+    return () => p.dispose({ release: true })
+  }, [])
+  useEffect(() => {
+    player.current.load(source).catch((e) => { if (e.name !== 'AbortError') console.error(e) })
+  }, [source])
+  return <canvas ref={canvas} style={{ width: 320, height: 400 }} />
+}
+```
+
+### When the context is lost
+
+A browser can take a page's WebGL context away: a phone reclaiming memory while the page is in the background, a graphics
+driver restarting, too many contexts on the page. The character is gone from that canvas and does not come back by itself.
+`player.contextLost` says so, and `player.onContextLost` is called once. Meanwhile frames do nothing, and `load()` rejects with
+`context-lost`. The way back is a new canvas and a new player:
+
+```js
+function show(parent, source) {
+  const canvas = document.createElement('canvas')
+  parent.replaceChildren(canvas)
+  const player = new Player(canvas)
+  player.onContextLost = () => {
+    player.dispose()
+    const again = () => show(parent, source)
+    if (document.hidden) addEventListener('visibilitychange', again, { once: true })  // when someone is back to see it
+    else again()
+  }
+  player.load(source).catch(console.error)
+  return player
+}
+```
 
 ### The mark
 
@@ -311,11 +406,15 @@ await vrm.load('/avatars/me.vrm')            // a URL, a File, or files picked
   file's own words in `raw`. The player does not enforce them. A page playing other people's avatars should show them and
   keep to them, as you would with a LivLiv package's `meta.license`.
 - **Your own**: anything with `load(files)`, `render(canvas, pose, w, h, dt)`, `head()` and `dispose()` (the `Body`
-  type), and if it cares which canvas it gets, `attach(canvas)`. `pose` has the params after the idle motion and the
+  type), and if it cares which canvas it gets, `attach(canvas)`. One that draws with WebGL can also have `context()`, returning
+  its context, so that `contextLost` and `dispose({ release })` work for it. `pose` has the params after the idle motion and the
   drivers, the picture's `move` and each expression's weight.
 
 A failed `load()` keeps the character before, as on a Player. A canvas has one kind of context for good: a PNGTuber draws in 2D, a Player and a VRM in WebGL2, so a PNGTuber on a canvas that was a Player's (or the other way round) is refused with an error; give it its own.
-A BodyPlayer draws no mark and has no `puppet`; `view.head` is not used. Live2D models (`.moc3`) are not supported:
+A BodyPlayer takes the same `load()` options and its errors are the same, with one difference: a Body swaps its character
+inside its own `load`, which cannot be interrupted, so a character already going in finishes and the newer one follows.
+Downloads and loads still waiting are replaced, as on a Player. It draws no mark and has no `poke` or `canvasToModel`;
+`view.head` is not used. `onContextLost` and `dispose({ release })` are for a VRM; a PNGTuber has no context to lose. Live2D models (`.moc3`) are not supported:
 reading them takes Live2D's proprietary Cubism Core, under its own licence.
 
 ## Untrusted files

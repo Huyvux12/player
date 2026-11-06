@@ -10,14 +10,15 @@
 <p id="note" style="position:fixed;z-index:1;inset:45% 0 auto;margin:0;color:#eef;font:14px system-ui,sans-serif;text-align:center"></p>
 <script type="module">
   import { Player } from '../dist/index.js'
-  import { loadWithFallback, loading } from './loading.js'
+  import { loadWithFallback, loading, watchContext } from './loading.js'
 
   // a featured character; your own export works the same
   const note = document.getElementById('note'), canvas = document.getElementById('stage')
   if (!Player.isSupported()) { note.textContent = 'This browser has no WebGL2'; throw new Error('no WebGL2') }
   const player = new Player(canvas)
+  watchContext(player)
   const done = loading(canvas, document.getElementById('cover'), '../characters/d03ft.livliv')
-  const model = await loadWithFallback(player, '../characters/d03ft.livliv').catch((e) => { note.textContent = e.message; throw e }).finally(done)
+  const model = await loadWithFallback(player, '../characters/d03ft.livliv', { onProgress: done.progress }).catch((e) => { note.textContent = e.message; throw e }).finally(done)
 
   // each click shows the next expression, then neutral again
   let i = -1

@@ -75,7 +75,7 @@ API の全体は [API.md](API.md)（英語）にあります：オプション�
 
 Kujira、Kujira Q、Pen は他の方の作品に基づくもので、上記のライセンスとクレジットは適用されません。出典、クレジット、条件は [characters/CREDITS.md](characters/CREDITS.md) をご覧ください。
 
-各キャラクターには `cover.webp`（512 x 768、約 50 KB）もあります。最初のフレームで、マークは入っていません。キャンバスの下に `object-fit: contain` で置き、準備ができたらキャラクターをフェードインさせます（[example/loading.js](example/loading.js) がこの方法です）。ページにすぐ絵が出て、切り替わるときにずれません。
+各キャラクターには `cover.webp`（512 x 768、約 50 KB）もあります。最初のフレームで、マークは入っていません。`player.load(source, { poster })` を使うと、最初のフレームが出るまでキャンバスに表示されます。スクリプトが動く前から絵を出したいときは、キャンバスの下に `object-fit: contain` で置き、準備ができたらキャラクターをフェードインさせます（[example/loading.js](example/loading.js) がこの方法です）。
 
 キャラクターの一覧は[英語の README](README.md#featured-characters) にあります。
 

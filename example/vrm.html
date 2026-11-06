@@ -29,9 +29,10 @@
   import { BodyPlayer } from '../dist/body.js'
   import { VrmBody } from '../dist/vrm.js'
   import { cameraButton } from './camera.js'
-  import { sameSite } from './loading.js'
+  import { sameSite, watchContext } from './loading.js'
 
   const player = new BodyPlayer(document.getElementById('stage'), new VrmBody())
+  watchContext(player)
   const status = document.getElementById('status'), bar = document.getElementById('bar')
   window.player = player
 
@@ -50,7 +51,7 @@
       for (const a of ['nod', 'shake', 'tilt']) {
         const b = document.createElement('button'); b.className = 'x'; b.textContent = a; b.onclick = () => player.act(a); bar.append(b)
       }
-    } catch (e) { status.textContent = e.message }
+    } catch (e) { if (e.name !== 'AbortError') status.textContent = e.message }  // (another was picked meanwhile)
   }
   document.getElementById('pick').onchange = (e) => e.target.files.length && show(e.target.files[0])
   const url = new URLSearchParams(location.search).get('model')

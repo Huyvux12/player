@@ -34,7 +34,7 @@
 </main>
 <script type="module">
   import { Player } from '../dist/index.js'
-  import { loadWithFallback, loading, needWebGL } from './loading.js'
+  import { loadWithFallback, loading, needWebGL, watchContext } from './loading.js'
 
   // All the featured characters: one plays on the stage (one player, one WebGL context), the rest wait as their
   // pictures; a click on one puts it on the stage. ?id=<id> starts with that one (else Refined Nana); ?demo=1 plays expressions and
@@ -48,6 +48,7 @@
   needWebGL(Player)
   const canvas = document.getElementById('stage'), cover = document.getElementById('cover')
   const player = new Player(canvas, { maxPixelRatio: 1.5 })
+  watchContext(player)
   const bar = document.getElementById('bar'), name = document.getElementById('name'), credit = document.getElementById('credit'), ul = document.getElementById('cast')
   const buttons = new Map()
   let current = null, exprs = [], next = -1
@@ -71,8 +72,9 @@
     const source = `../characters/${id}.livliv`, done = loading(canvas, cover, source)
     let m
     try {
-      m = await loadWithFallback(player, source).finally(done)
+      m = await loadWithFallback(player, source, { onProgress: done.progress }).finally(done)
     } catch (e) {  // the one on the stage stays; a click can try this one again
+      if (e.name === 'AbortError') return  // another was picked meanwhile
       if (id === current) { current = before; press(before); name.textContent = e.message }
       return
     }

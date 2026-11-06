@@ -16,7 +16,7 @@
 //    the `brows` layer alone where the build gave the brows one (drawn over the bangs); that layer moves with
 //    the bangs where it lies over them
 //  - body: lags the head turn / tilt, breathes (shoulders + chest), optional chest spring
-import { LIMITS, latticeCell, readModel, type Labels, type ModelFiles, type ModelMeta } from './format'
+import { LIMITS, coded, latticeCell, readModel, type Labels, type ModelFiles, type ModelMeta } from './format'
 import { PARAM_RANGES, defaultParams, smooth, type Params } from './params'
 
 export { PARAM_RANGES, defaultParams, smooth, type Params }
@@ -189,9 +189,11 @@ export const defaultRig = (): Rig => ({
 })
 /** user-facing "feel" settings (livliv.ai's feel sliders); 1 = default. nod scales up / down on top of turn. hair is how
  *  freely the hair swings; hairFront (the bangs' springs) and hairBack (long hair's, and the swinging pieces': chains)
- *  each take its place when set, so a model saved with hair alone moves both as before */
-export type Tuning = { turn: number; nod: number; hair: number; blink: number; expr: number; mouth: number; breath: number; hairFront?: number; hairBack?: number }
-export const defaultTuning = (): Tuning => ({ turn: 1, nod: 1, hair: 1, blink: 1, expr: 1, mouth: 1, breath: 1 })
+ *  each take its place when set, so a model saved with hair alone moves both as before.
+ *  gaze: the share of the iris's travel it uses, 0-1. Less shows less of what a far look uncovers in the whites and fixes
+ *  none of it; above 1 only shows more, so it stops at 1 */
+export type Tuning = { turn: number; nod: number; hair: number; blink: number; expr: number; mouth: number; breath: number; hairFront?: number; hairBack?: number; gaze: number }
+export const defaultTuning = (): Tuning => ({ turn: 1, nod: 1, hair: 1, blink: 1, expr: 1, mouth: 1, breath: 1, gaze: 1 })
 
 interface GLLayer {
   def: LayerDef
@@ -313,6 +315,12 @@ function browLimits(A: ModelDef['anchors'], amp: number): [number, number] {
   })
   return any ? [up, down] : [0, 0]
 }
+
+/** what a caller may give a load: see Puppet.load */
+interface LoadExtras { signal?: AbortSignal; onImage?: (came: number, of: number) => void }
+
+/** a layer's images, as they came in */
+interface LayerImages { main: HTMLImageElement; frames: HTMLImageElement[]; mask?: HTMLImageElement; talk?: HTMLImageElement; brows?: HTMLImageElement }
 
 interface Spring { x: number; y: number; vx: number; vy: number }
 const spring = (): Spring => ({ x: 0, y: 0, vx: 0, vy: 0 })
@@ -490,13 +498,15 @@ export class Puppet {
   /** baseUrl: the model's folder, or its model.json (the SDK: any name ending in .json); the images are read relative to
    *  it. png: load the lossless layer PNGs even where a WebP copy exists (eval: rest-pose PSNR is scored against the
    *  source, and quality-92 WebP alone costs 1.3–6.4 dB on line art). pack: try the server's textures.bin first (an
-   *  exported package has none: the SDK turns it off rather than ask for it and get a 404) */
-  async load(baseUrl: string, { png = false, pack: usePack = true } = {}) {
+   *  exported package has none: the SDK turns it off rather than ask for it and get a 404). signal: calls the load off
+   *  until the model starts going in, which then happens at once and whole; it rejects with the signal's reason and the
+   *  model before stays. onImage: each image that has come in, of how many */
+  async load(baseUrl: string, { png = false, pack: usePack = true, signal, onImage }: { png?: boolean; pack?: boolean } & LoadExtras = {}) {
     const { file, base, query } = locate(baseUrl)
-    const r = await fetch(file + (query ? `?${query}` : ''), { cache: 'no-store' })
+    const r = await fetch(file + (query ? `?${query}` : ''), { cache: 'no-store', signal })
     if (!r.ok) throw Object.assign(new Error(r.status === 404 ? 'model not found' : `model.json ${r.status}`), { status: r.status })
     const text = await r.text()
-    if (text.length > LIMITS.modelJson) throw new Error(`model.json is larger than ${LIMITS.modelJson} bytes`)
+    if (text.length > LIMITS.modelJson) throw coded('too-large', `model.json is larger than ${LIMITS.modelJson} bytes`)
     const model = readModel(JSON.parse(text))
     // layer files keep their names when a character is rebuilt and are cached for hours, while model.json never is:
     // tag them with the version of their bytes the server sends with it (tex), so a save of the feel settings, which rewrites
@@ -512,26 +522,31 @@ export class Puppet {
     }
     const v = `?v=${tag}${query ? `&${query}` : ''}`
     // alongside the images, not before them. Without it the character still plays, on the rig alone
-    const keyforms = model.keyforms ? fetch(base + model.keyforms + v).then(async (k) => {
+    const keyforms = model.keyforms ? fetch(base + model.keyforms + v, { signal }).then(async (k) => {
       const t = k.ok ? await k.text() : ''
       return t && t.length <= LIMITS.keyforms ? JSON.parse(t) as KeyformFile : undefined
     }).catch(() => undefined) : undefined
     // all of them in one file when the server has it: one request instead of ~30
-    const pack = png || !usePack ? null : await loadPack(packUrl(baseUrl, tag))
-    await this.loadModel(model, (f) => { const b = pack?.get(f); return b ? loadBlob(b) : loadImage(base + f + v) }, { png, keyforms })
+    const pack = png || !usePack ? null : await loadPack(packUrl(baseUrl, tag), signal)
+    // (an <img> cannot be called off: setting src to '' is an error, removing it never ends)
+    const fetched = (f: string) => (signal ? fetchImage(base + f + v, signal) : loadImage(base + f + v))
+    await this.loadModel(model, (f) => { const b = pack?.get(f); return b ? loadBlob(b) : fetched(f) }, { png, keyforms, signal, onImage })
   }
 
   /** a model from anywhere (the SDK: files the user picked): its model.json, and each image it names by its path there */
   async loadModel(raw: ModelDef, image: (path: string) => Promise<HTMLImageElement>,
-    { png = false, keyforms: keyformsComing }: { png?: boolean; keyforms?: KeyformFile | Promise<KeyformFile | undefined> } = {}) {
+    { png = false, keyforms: keyformsComing, signal, onImage }: { png?: boolean; keyforms?: KeyformFile | Promise<KeyformFile | undefined> } & LoadExtras = {}) {
     const model = readModel(raw)
+    let asked = 0, came = 0
+    const arrived = (i: HTMLImageElement) => { onImage?.(++came, asked); return i }
     // every image at once: a layer's second image waiting for its first cost a round trip each on a slow path
     const [imgs, keyforms] = await Promise.all([Promise.all(model.layers.map(async (L) => {
-      const load = (p: string) => image(L.webp && !png ? p.replace(/\.png$/, '.webp') : p)
+      const load = (p: string) => { asked++; return image(L.webp && !png ? p.replace(/\.png$/, '.webp') : p).then(arrived) }
       const [main, frames, mask, talk, brows] = await Promise.all([load(L.texture), Promise.all((L.frames || []).map(load)),
         L.mask ? load(L.mask) : undefined, L.talk ? load(L.talk) : undefined, L.brow_tex ? load(L.brow_tex) : undefined])
       return { main, frames, mask, talk, brows }
     })), keyformsComing])
+    if (signal?.aborted) throw signal.reason
     // before anything reaches the GPU (an image's size is known once it loads, before it is decoded in full)
     const most = Math.min(LIMITS.texture, (this.gl?.getParameter(this.gl.MAX_TEXTURE_SIZE) as number) || LIMITS.texture)
     let texels = 0
@@ -539,10 +554,37 @@ export class Puppet {
       if (!i) continue
       const w = i.naturalWidth || i.width, h = i.naturalHeight || i.height
       if (w > most || h > most || (texels += w * h) > LIMITS.texels) {
-        throw new Error(`this model's images are too large (${w} x ${h}: ${most} px a side and ${LIMITS.texels} pixels in all at most)`)
+        throw coded('too-large', `this model's images are too large (${w} x ${h}: ${most} px a side and ${LIMITS.texels} pixels in all at most)`)
       }
     }
-    this.dispose()
+    this.install(model, imgs, keyforms)
+  }
+
+  /** the model in place of the one before, or, if anything throws on the way (its layers, its keyforms, the GPU out of
+   *  memory), the one before exactly as it was: its layers on the GPU, every field, every spring. All in one go: no frame
+   *  runs in between. The GPU holds both for that moment */
+  private install(model: ModelDef, imgs: LayerImages[], keyforms: KeyformFile | undefined) {
+    const gl = this.gl
+    // every field; copies of the two this changes in place rather than replaces
+    const before = { ...this, drive: { ...this.drive },
+      chains: Object.fromEntries(Object.entries(this.chains).map(([g, c]) => [g, c.map((q) => ({ ...q }))])) as Puppet['chains'] }
+    const built: GLLayer[] = []
+    for (let i = 0; i < 8 && gl.getError(); i++);  // an error left by anything earlier is not this model's
+    try {
+      this.build(model, imgs, keyforms, built)
+      for (let i = 0, e; i < 8 && (e = gl.getError()); i++) {  // (one flag at a time, in no set order)
+        if (e === gl.OUT_OF_MEMORY) throw coded('too-large', 'the GPU ran out of memory for this model')
+      }
+    } catch (e) {
+      this.freeLayers(built)
+      Object.assign(this, before)
+      throw e
+    }
+    this.freeLayers(before.layers)
+    this.freeMask()
+  }
+
+  private build(model: ModelDef, imgs: LayerImages[], keyforms: KeyformFile | undefined, built: GLLayer[]) {
     this.model = model
     this.chainRuns = (model.rig?.chains || []).map(chainRun)
     const mouth = model.layers.find((L) => L.role === 'mouth')
@@ -560,8 +602,9 @@ export class Puppet {
     // the brows layers lie over the bangs where the build put them there: they follow what is under them
     const fi = model.layers.findIndex((L) => L.group === 'hair_front')
     const bangs = fi >= 0 ? { img: imgs[fi].main, def: model.layers[fi] } : undefined
-    this.layers = model.layers.map((L, i) => this.buildLayer(L, imgs[i].main, imgs[i].frames, imgs[i].mask, imgs[i].talk, imgs[i].brows,
-      L.id === 'brows' || L.role === 'expr_brows' || L.brow_tex ? bangs : undefined))
+    model.layers.forEach((L, i) => built.push(this.buildLayer(L, imgs[i].main, imgs[i].frames, imgs[i].mask, imgs[i].talk, imgs[i].brows,
+      L.id === 'brows' || L.role === 'expr_brows' || L.brow_tex ? bangs : undefined)))
+    this.layers = built
     this.byId = new Map(this.layers.map((l) => [l.def.id, l]))
     // each iris's room toward the nose: the nose lies toward the eyes' midpoint (a view with one eye has no limit)
     this.nasal = {}
@@ -665,14 +708,23 @@ export class Puppet {
   }
 
   dispose() {
+    this.freeLayers(this.layers)
+    this.freeMask()
+    this.layers = []
+  }
+
+  private freeLayers(layers: GLLayer[]) {
     const gl = this.gl
-    for (const L of this.layers) {
+    for (const L of layers) {
       gl.deleteTexture(L.tex); L.frames.forEach((t) => gl.deleteTexture(t)); if (L.mask) gl.deleteTexture(L.mask); if (L.talk) gl.deleteTexture(L.talk)
       if (L.browTex) gl.deleteTexture(L.browTex)
       gl.deleteVertexArray(L.vao); gl.deleteBuffer(L.pos); gl.deleteBuffer(L.uvs); gl.deleteBuffer(L.tris)
     }
+  }
+
+  private freeMask() {
+    const gl = this.gl
     if (this.maskFb) { gl.deleteFramebuffer(this.maskFb); gl.deleteTexture(this.maskTex); this.maskFb = this.maskTex = null; this.maskSize = [0, 0] }
-    this.layers = []
   }
 
   private texture(img: HTMLImageElement) {
@@ -680,7 +732,12 @@ export class Puppet {
     const t = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, t)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+    try {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+    } catch (e) {
+      gl.deleteTexture(t)
+      throw e
+    }
     gl.generateMipmap(gl.TEXTURE_2D)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
@@ -858,9 +915,19 @@ export class Puppet {
     const tri = new Uint32Array(idx)
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tri, gl.STATIC_DRAW)
     gl.bindVertexArray(null)
+    // an upload can throw (a canvas's image it may not read): nothing of this layer stays on the GPU
+    const made: WebGLTexture[] = []
+    const texture = (i: HTMLImageElement) => { const t = this.texture(i); made.push(t); return t }
+    let tex: WebGLTexture, frameTex: WebGLTexture[], maskTex: WebGLTexture | undefined, talkTex: WebGLTexture | undefined, browTex: WebGLTexture | undefined
+    try {
+      tex = texture(img); frameTex = frames.map(texture); maskTex = mask && texture(mask); talkTex = talk && texture(talk); browTex = brows && texture(brows)
+    } catch (e) {
+      made.forEach((t) => gl.deleteTexture(t))
+      gl.deleteVertexArray(vao); gl.deleteBuffer(pb); gl.deleteBuffer(ub); gl.deleteBuffer(ib)
+      throw e
+    }
     return {
-      def: L, tex: this.texture(img), frames: frames.map((f) => this.texture(f)), mask: mask ? this.texture(mask) : undefined,
-      talk: talk ? this.texture(talk) : undefined, browTex: brows ? this.texture(brows) : undefined,
+      def: L, tex, frames: frameTex, mask: maskTex, talk: talkTex, browTex,
       vao, pos: pb, uvs: ub, tris: ib, count: idx.length, rest, out: new Float32Array(rest.length), tri, tw: img.naturalWidth || img.width, th: img.naturalHeight || img.height,
       wHead, wPhys1, wPhys2, dep, wBrow, browSide, browCap, wFront, wJaw, wNeck, wTwist, fol, folB, alt,
       outB: folB ? new Float32Array(rest.length) : undefined, stencilRef: 0, soft: 0, maskCh: -1, skin, altSkin,
@@ -1301,6 +1368,7 @@ export class Puppet {
       }
     }
     const roll = (P.angleZ * Math.PI) / 180 * this.rig.roll * this.tuning.turn
+    const g = this.tuning.gaze, gz = typeof g === 'number' && g >= 0 && g < 1 ? g : 1  // the feel settings' eye movement; anything else is the full travel
     // rig.neck: how far the chin goes sideways from where the torso alone puts it (model px)
     let chinDx = 0
     if (this.rig.neck) {
@@ -1322,9 +1390,9 @@ export class Puppet {
       const squash = 0.12 + 0.88 * open
       const iris = role.startsWith('iris_')
       let ix = 0, iy = 0
-      if (iris && d.range) { ix = P.eyeBallX * d.range[0]; iy = -P.eyeBallY * d.range[1] }
+      if (iris && d.range) { ix = P.eyeBallX * d.range[0] * gz; iy = -P.eyeBallY * d.range[1] * gz }
       // (a model with swinging chains: its highlights follow the gaze too)
-      if (this.chained && role.startsWith('shine_') && d.range) { ix = P.eyeBallX * d.range[0]; iy = -P.eyeBallY * d.range[1] }
+      if (this.chained && role.startsWith('shine_') && d.range) { ix = P.eyeBallX * d.range[0] * gz; iy = -P.eyeBallY * d.range[1] * gz }
       // irisNasal: past its room toward the nose the inner edge stays put and the far edge travels on (at a
       // vertex the shift is nx + nk * its rest x); the eye's highlights go with it
       let nx = ix, nk = 0
@@ -1737,16 +1805,17 @@ export function packUrl(baseUrl: string, tag: string) {
 /** textures.bin: the header's length (4 bytes, little-endian), the header (JSON {path: [offset,
  *  length]}, and tex: the images' version), the files. null when it is not there or unreadable: the files are then
  *  fetched one by one */
-async function loadPack(url: string): Promise<Map<string, Blob> | null> {
+async function loadPack(url: string, signal?: AbortSignal): Promise<Map<string, Blob> | null> {
   try {
-    const r = await fetch(url)
+    const r = await fetch(url, { signal })
     if (!r.ok) return null
     const buf = await r.arrayBuffer()
     const n = new DataView(buf).getUint32(0, true)
     const head: Record<string, [number, number] | string> = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n)))
     return new Map(Object.entries(head).filter((e): e is [string, [number, number]] => Array.isArray(e[1])).map(([k, [o, len]]) =>
       [k, new Blob([new Uint8Array(buf, 4 + n + o, len)], { type: k.endsWith('.png') ? 'image/png' : 'image/webp' })]))
-  } catch {
+  } catch (e) {
+    if (signal?.aborted) throw e
     return null
   }
 }
@@ -1756,6 +1825,20 @@ async function loadPack(url: string): Promise<Map<string, Blob> | null> {
 export function loadBlob(b: Blob): Promise<HTMLImageElement> {
   const u = URL.createObjectURL(b)
   return loadImage(u).finally(() => URL.revokeObjectURL(u))
+}
+
+/** an image that can be called off: fetched, then decoded like any other */
+async function fetchImage(src: string, signal: AbortSignal): Promise<HTMLImageElement> {
+  let b: Blob
+  try {
+    const r = await fetch(src, { signal })
+    if (!r.ok) throw new Error()
+    b = await r.blob()
+  } catch (e) {
+    if (signal.aborted) throw e
+    throw new Error('image ' + src)
+  }
+  return loadBlob(b)
 }
 
 export function loadImage(src: string): Promise<HTMLImageElement> {

@@ -1,6 +1,6 @@
 {
   "name": "@livliv/player",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "LivLiv Player: a lightweight 2.5D character player for the web, with lip sync and webcam face tracking. Plays LivLiv, VRM and PNGTuber characters; WebGL2, no dependencies in the core.",
   "private": true,
   "license": "Apache-2.0",
@@ -29,6 +29,7 @@
     "dist",
     "README.md",
     "API.md",
+    "CHANGELOG.md",
     "FORMAT.md",
     "FORMAT-v3.md",
     "schema",
@@ -95,6 +96,7 @@
     "test:types": "node test/types.mjs",
     "check": "tsc -p tsconfig.json",
     "test": "node --disable-warning=ExperimentalWarning --import ./test/ts.mjs --test \"test/*.test.ts\"",
-    "test:browser": "node test/smoke.mjs"
+    "test:browser": "node test/smoke.mjs",
+    "test:engines": "node test/smoke.mjs firefox && node test/smoke.mjs webkit"
   }
 }

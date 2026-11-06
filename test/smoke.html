@@ -42,6 +42,7 @@
   }
 
   let FILES = {}
+  window.setFiles = (files) => { FILES = files }
   /** a model as files (path -> Blob) under a folder, as a folder picked in the browser gives them: its model.json as
    *  given, everything else as the folder has it */
   async function filesOf(id, model, swap = {}) {
@@ -122,6 +123,20 @@
     const vrmHere = await player.load(new File([await (await fetch('/__tiny.vrm')).blob()], 'x.vrm')).then(() => 'loaded', (e) => e.message)
     const vrmFolder = await player.load(new Map([['a/x.vrm', new Blob(['x'])]])).then(() => 'loaded', (e) => e.message)
 
+    // what a load rejects with says what went wrong, in code
+    const codeOf = (source) => player.load(source).then(() => 'loaded', (e) => (e.name === 'LivLivError' ? e.code : `not a LivLivError: ${e.name} ${e.message}`))
+    const codes = {
+      'http': await codeOf('/__nothing-here.livliv'), 'not-a-model': await codeOf(new File([new Blob(['just text'])], 'x.livliv')),
+      'not-a-model json': await codeOf(new Map([['model.json', new Blob([JSON.stringify({ format: 'something else' })])]])),
+      'not-a-model vrm': await codeOf(new File([await (await fetch('/__tiny.vrm')).blob()], 'x.vrm')),
+      'newer-format': await codeOf(new Map([['model.json', new Blob([JSON.stringify({ ...model, version: FORMAT_VERSION + 1 })])]])),
+      'missing-feature': await codeOf(new Map([['model.json', new Blob([JSON.stringify({ ...model, requires: ['from-the-future'] })])]])),
+      'missing-file': await codeOf(new Map([['model.json', new Blob([JSON.stringify(model)])]])),
+      'missing-file none': await codeOf(new Map([['a.txt', new Blob(['x'])]])),
+      'invalid': await codeOf(new Map([['model.json', new Blob([JSON.stringify({ ...model, layers: [] })])]])),
+      'too-large': await codeOf(new Map([['model.json', new Blob([JSON.stringify({ ...model, canvas: [100000, 100] })])]])),
+    }
+
     // a newer format: refused, and the model before stays
     let newer
     try {
@@ -146,7 +161,7 @@
     } catch (e) {
       legacy = { error: String(e.message || e) }
     }
-    return { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder }
+    return { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder, codes }
   }
 
   /** disposing while something runs: a load rejects and leaves nothing on the GPU or the canvas; a driver added to a
@@ -165,7 +180,7 @@
       // disposed just as the images start coming in (a timer could lose the race to a quick load)
       const loadModel = p.puppet.loadModel.bind(p.puppet)
       p.puppet.loadModel = (...args) => { p.dispose(); return loadModel(...args) }
-      out.load = await p.load(`../characters/${id}/`).then(() => 'resolved', (e) => e.message)
+      out.load = await p.load(`../characters/${id}/`).then(() => 'resolved', (e) => `${e.name}: ${e.message}`)
       p.resize()
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
       const px = new Uint8Array(4)
@@ -206,6 +221,273 @@
       navigator.mediaDevices.getUserMedia = real
       out.mic = stream.getTracks()[0].readyState
     }
+    c.remove()
+    return out
+  }
+
+  /** a model that breaks while it is built, past the checks and the download: wherever it breaks, the character before
+   *  stays as it was (every pixel, every field, what is on the GPU) and the next good model plays. k: the character
+   *  standing there, in motion so that a spring put back wrong would show; b: the one that breaks, with chains and keyforms */
+  window.runKeep = async (k, b) => {
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 200px; height: 240px'
+    document.body.append(c)
+    const p = new Player(c, { autoplay: false, followPointer: false, idle: false }), pup = p.puppet, gl = pup.gl
+    const live = { texture: 0, buffer: 0, vertexArray: 0 }
+    for (const [kind, make, free] of [['texture', 'createTexture', 'deleteTexture'], ['buffer', 'createBuffer', 'deleteBuffer'], ['vertexArray', 'createVertexArray', 'deleteVertexArray']]) {
+      const m = gl[make], f = gl[free]
+      gl[make] = function () { live[kind]++; return m.call(gl) }
+      gl[free] = function (t) { if (t) live[kind]--; return f.call(gl, t) }
+    }
+    const kept = await filesOf(k, bare(await json(k))), broken = await filesOf(b, bare(await json(b)))
+    const grab = () => {
+      const o = document.createElement('canvas'); o.width = c.width; o.height = c.height
+      const x = o.getContext('2d', { willReadFrequently: true })
+      x.drawImage(c, 0, 0)
+      return x.getImageData(0, 0, o.width, o.height).data
+    }
+    const fields = () => JSON.stringify({ name: pup.model?.name, layers: pup.layers.length, chains: pup.chains, drive: pup.drive, body: pup.body, bust: pup.bust, lastHead: pup.lastHead,
+      smile: pup.smileShown, mouth: [pup.mouthFrame, pup.mouthW, pup.mouthHeld, pup.talkLeft, pup.frameKind, pup.frameJaw], keys: [pup.keys, pup.kfOff], rig: pup.rig, tuning: pup.tuning,
+      time: pup.time, runs: pup.chainRuns.map((C) => [...C.p]), params: pup.params, player: p.model?.name })
+    const stand = async () => {
+      await p.load(kept)
+      Object.assign(p.params, { angleX: 25, mouthOpen: 0.8, smile: 1 })
+      for (let i = 0; i < 25; i++) p.draw(1 / 60)
+      p.draw(0)
+    }
+    /** each arms one failure and returns how to take it away, which says whether the load got there */
+    const places = {
+      // nothing breaks: what the comparison below does with no failure at all (the good model simply plays)
+      none: null,
+      // the chains, the first thing built
+      chain() { const f = Array.prototype.flat; let n = 0; Array.prototype.flat = function () { n++; throw new Error('injected') }; return () => { Array.prototype.flat = f; return n > 0 } },
+      // a layer, part of the way through the list: those before it are on the GPU
+      layer() { const f = pup.buildLayer; let n = 0; pup.buildLayer = function (...a) { if (++n === 4) throw new Error('injected'); return f.apply(this, a) }; return () => { delete pup.buildLayer; return n >= 4 } },
+      // an upload, inside a layer: its mesh and some of its textures are on the GPU
+      upload() { const f = gl.texImage2D; let n = 0; gl.texImage2D = function (...a) { if (++n === 3) throw new Error('injected'); return f.apply(gl, a) }; return () => { delete gl.texImage2D; return n >= 3 } },
+      // the springs: the layers are done and most fields are already the new model's
+      physics() { let n = 0; pup.resetPhysics = function () { n++; throw new Error('injected') }; return () => { delete pup.resetPhysics; return n > 0 } },
+      // the keyforms, last and heaviest, in the middle of swapping the pose for its own
+      keyforms() { const f = pup.prepareKeyforms; let n = 0; pup.prepareKeyforms = function (K) { n++; return f.call(this, { ...K, keys: [K.keys[0], null] }) }; return () => { delete pup.prepareKeyforms; return n > 0 } },
+      // the GPU out of memory: nothing throws, it says so afterwards
+      memory() { let n = 0; gl.getError = function () { return n++ ? gl.OUT_OF_MEMORY : gl.NO_ERROR }; return () => { delete gl.getError; return n > 1 } },
+    }
+    const out = {}
+    for (const [name, arm] of Object.entries(places)) {
+      await stand()
+      const px = grab(), state = fields(), gpu = JSON.stringify(live)
+      if (!arm) { p.draw(0); out[name] = { differ: differs(px, grab()) }; continue }
+      const done = arm()
+      const said = await p.load(broken).then(() => null, (e) => String(e.message || e))
+      const reached = done(), after = fields(), gpuAfter = JSON.stringify(live)
+      p.draw(0)
+      const differ = differs(px, grab())
+      const next = await p.load(broken).then((m) => m.name, (e) => `refused: ${e.message}`)
+      p.draw(1 / 60)
+      out[name] = { said, reached, differ, sameFields: state === after, sameGpu: gpu === gpuAfter, next, glError: gl.getError() }
+    }
+    p.dispose()
+    out.left = { ...live }
+    c.remove()
+    return out
+  }
+  const differs = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++; return n }
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  /** until the condition holds, or some seconds: what a browser does next may take a while on a busy machine */
+  const until = async (cond, ms = 5000) => { for (const t0 = performance.now(); !cond() && performance.now() - t0 < ms;) await wait(10) }
+  const nameOf = (m) => m.name, errName = (e) => e.name
+
+  /** several loads at once, and calling a load off: the last one plays, the others stop and say so. Slow: a route of
+   *  smoke.mjs that takes about a second */
+  window.runLoads = async ([a, b, d]) => {
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 160px; height: 200px'
+    document.body.append(c)
+    const p = new Player(c, { autoplay: false, followPointer: false }), out = {}
+    const slow = (id) => `/__slow/${id}.livliv`
+    // three in a row: only the last goes in
+    let went = 0
+    const install = p.puppet.install
+    p.puppet.install = function (...args) { went++; return install.apply(this, args) }
+    const first = p.load(slow(a)).then(nameOf, errName)
+    await wait(120)
+    const second = p.load(slow(b)).then(nameOf, errName)
+    await wait(120)
+    const third = await p.load(`../characters/${d}.livliv`).then(nameOf, errName)
+    out.row = { first: await first, second: await second, third, shown: p.model?.name, went }
+    delete p.puppet.install
+    // nobody catching: a replaced load reports nothing, a real error is reported as ever
+    const unhandled = []
+    const note = (e) => { unhandled.push(e.reason?.code ?? e.reason?.name); e.preventDefault() }
+    addEventListener('unhandledrejection', note)
+    p.load(slow(a))
+    await p.load(`../characters/${b}.livliv`)
+    await wait(80)
+    out.quiet = unhandled.length
+    p.load('/__nothing-here.livliv')
+    await until(() => unhandled.length)
+    await wait(50)
+    out.loud = [...unhandled]
+    removeEventListener('unhandledrejection', note)
+    // a signal already aborted: refused at once, and it leaves the running load alone
+    const running = p.load(`../characters/${a}.livliv`).then(nameOf, errName)
+    const off = new AbortController()
+    off.abort()
+    out.already = { said: await p.load(`../characters/${d}.livliv`, { signal: off.signal }).then(nameOf, errName), running: await running }
+    // one's own signal: the load stops, the character stays, the reason is its own
+    const before = p.model.name
+    const own = new AbortController()
+    const mine = p.load(slow(b), { signal: own.signal }).then(nameOf, errName)
+    await wait(120)
+    own.abort()
+    out.own = { said: await mine, kept: p.model.name === before }
+    const why = new AbortController()
+    const reason = p.load(slow(b), { signal: why.signal }).then(nameOf, (e) => e.message)
+    await wait(50)
+    why.abort(new Error('my reason'))
+    out.reason = await reason
+    // progress, for each way a model comes
+    const steps = async (source) => { const seen = []; await p.load(source, { onProgress: (s) => seen.push(s) }); return seen }
+    out.progress = { package: await steps(slow(a)), unknown: await steps(`/__slow-nosize/${a}.livliv`), folder: await steps(`../characters/${a}/`), files: await steps(await filesOf(a, await json(a))) }
+    // a callback that throws does not break the load
+    const log = console.error
+    console.error = () => {}
+    out.badCallback = await p.load(`../characters/${a}.livliv`, { onProgress() { throw new Error('mine') } }).then(nameOf, (e) => e.message)
+    console.error = log
+    // disposed while it runs
+    const going = p.load(slow(b)).then(nameOf, (e) => [e.name, e.message])
+    await wait(80)
+    p.dispose()
+    out.disposed = await going
+    out.after = await p.load(slow(b)).then(nameOf, errName)
+    c.remove()
+    return out
+  }
+
+  /** the WebGL context lost, and given up */
+  window.runContext = async (id, big = true) => {
+    const out = {}
+    const box = () => { const c = document.createElement('canvas'); c.style.cssText = 'width: 60px; height: 80px'; document.body.append(c); return c }
+    const pk = `../characters/${id}.livliv`
+    const lose = (p) => p.puppet.gl.getExtension('WEBGL_lose_context').loseContext()
+    const code = (e) => e.code ?? e.name
+    {
+      // lost: the page is told once, nothing draws or throws, a load says so at once, and one running is called off
+      const c = box(), p = new Player(c, { followPointer: false })
+      await p.load(pk)
+      let told = 0
+      p.onContextLost = () => told++
+      out.before = p.contextLost
+      const going = p.load(`/__slow/${id}.livliv`).then(() => 'loaded', code)
+      await wait(60)
+      lose(p)
+      await until(() => told)
+      out.running = await going
+      out.told = told
+      out.lost = p.contextLost
+      out.load = await p.load(pk).then(() => 'loaded', code)
+      p.play(); await wait(120)  // frames on a lost context
+      p.resize(); out.snapshot = typeof p.snapshot()
+      p.dispose()
+      out.newOnLost = (() => { try { new Player(c); return 'made' } catch (e) { return code(e) } })()
+      c.remove()
+    }
+    {
+      // released: gone one task later, and the canvas says so; the page is not told of its own doing
+      const c = box(), p = new Player(c, { followPointer: false }), gl = p.puppet.gl
+      await p.load(pk)
+      let told = 0
+      p.onContextLost = () => told++
+      p.dispose({ release: true })
+      out.sameTask = gl.isContextLost()
+      await until(() => gl.isContextLost())
+      await wait(30)
+      out.nextTask = gl.isContextLost()
+      out.releasedTold = told
+      out.reuse = (() => { try { new Player(c); return 'made' } catch (e) { return code(e) } })()
+      c.remove()
+    }
+    {
+      // a framework's unmount and mount of one canvas, in one task: the new player keeps the context
+      const c = box()
+      const a = new Player(c, { followPointer: false })
+      await a.load(pk)
+      let told = 0
+      a.onContextLost = () => told++
+      a.dispose({ release: true })
+      const b = new Player(c, { followPointer: false })
+      await wait(30)
+      out.remount = { lost: b.contextLost, loaded: await b.load(pk).then((m) => !!m.name, code), told }
+      b.resize()
+      out.remount.share = (() => { const x = document.createElement('canvas'); x.width = c.width; x.height = c.height; const g2 = x.getContext('2d', { willReadFrequently: true }); g2.drawImage(c, 0, 0); const d = g2.getImageData(0, 0, x.width, x.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n / (d.length / 4) })()
+      b.dispose({ release: true })
+      c.remove()
+    }
+    if (big) {
+      // characters coming and going beside one that stays: with release it stays, without it is pushed out
+      const stay = box(), keep = new Player(stay, { followPointer: false, autoplay: false })
+      await keep.load(pk)
+      let told = 0
+      keep.onContextLost = () => told++
+      for (let i = 0; i < 40; i++) {
+        const c = box(), p = new Player(c, { followPointer: false, autoplay: false })
+        p.dispose({ release: true })
+        c.remove()
+        await wait(0)
+      }
+      await wait(50)
+      out.withRelease = { lost: keep.contextLost, told }
+      const others = []
+      for (let i = 0; i < 20; i++) { const c = box(); others.push(new Player(c, { followPointer: false, autoplay: false })); await wait(0) }
+      await until(() => told, 2000)
+      out.withoutRelease = { lost: keep.contextLost, told }
+      out.overLimitLoad = await keep.load(pk).then(() => 'loaded', code)
+      keep.dispose()
+      for (const p of others) { p.dispose({ release: true }); p.canvas.remove() }
+      stay.remove()
+      await wait(30)
+    }
+    return out
+  }
+
+  /** the poster: on the canvas until the first frame, the canvas's own background back after */
+  window.runPoster = async (id) => {
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 160px; height: 200px; background-color: rgb(1, 2, 3)'
+    document.body.append(c)
+    const look = () => { const s = getComputedStyle(c); return { image: s.backgroundImage, size: s.backgroundSize, repeat: s.backgroundRepeat, color: s.backgroundColor } }
+    const poster = `../characters/${id}/cover.webp`, out = {}
+    const clean = look()
+    let p = new Player(c, { autoplay: false, followPointer: false })
+    const going = p.load(`/__slow/${id}.livliv`, { poster })
+    out.during = look()
+    await going
+    out.after = look()
+    out.same = JSON.stringify(out.after) === JSON.stringify(clean)
+    // over a character: none, that one stays until the next is ready
+    const next = p.load(`/__slow/${id}.livliv`, { poster })
+    out.over = look().image
+    await next
+    p.dispose()
+    // a load that fails takes it away, so that the page can say why
+    p = new Player(c, { autoplay: false, followPointer: false })
+    const refused = p.load('/__nothing-here.livliv', { poster }).catch(() => {})
+    out.failing = look().image
+    await refused
+    out.failed = look().image
+    // replaced by a load without one: gone at once; with one: that one
+    const a = p.load(`/__slow/${id}.livliv`, { poster }).catch(() => {})
+    const b = p.load(`/__slow/${id}.livliv`)
+    out.replaced = look().image
+    await a; await b
+    p.dispose()
+    // disposed while it shows
+    p = new Player(c, { autoplay: false, followPointer: false })
+    const d = p.load(`/__slow/${id}.livliv`, { poster }).catch(() => {})
+    p.dispose()
+    await d
+    out.disposed = look().image
     c.remove()
     return out
   }
@@ -272,8 +554,9 @@
    *  gets our words, not the browser's; a 404 is not tried again */
   window.runDropped = async (id) => {
     const p = new Player(canvas, { autoplay: false, followPointer: false })
-    const tell = (route) => p.load(route).then((m) => `played ${m.name}`, (e) => e.message)
-    const out = { once: await tell(`/__dropped/once/${id}.livliv`), always: await tell(`/__dropped/always/${id}.livliv`), missing: await tell('/__dropped/missing/x.livliv') }
+    const tell = (route) => p.load(route).then((m) => `played ${m.name}`, (e) => { said.push([e.code, e.status]); return e.message })
+    const said = []
+    const out = { said, once: await tell(`/__dropped/once/${id}.livliv`), always: await tell(`/__dropped/always/${id}.livliv`), missing: await tell('/__dropped/missing/x.livliv') }
     p.dispose()
     return out
   }
@@ -298,7 +581,7 @@
     }
     const out = {}
     for (const [k, files] of Object.entries(cases)) {
-      try { await player.load(await files); out[k] = { loaded: true } } catch (e) { out[k] = { refused: String(e.message || e), kept: player.model?.name } }
+      try { await player.load(await files); out[k] = { loaded: true } } catch (e) { out[k] = { refused: String(e.message || e), code: e.code, kept: player.model?.name } }
     }
     // keyforms that are not right: the character still plays, on the rig alone
     const kf = await json(kfId)

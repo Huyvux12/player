@@ -3,6 +3,7 @@
 // mouth open too). The picture sways with the head, tilts, breathes and hops with the voice, standing on the bottom of
 // the canvas. Files by name (any image the browser decodes): closed, open, blink, blink-open, and name.txt.
 import type { Body, Pose } from './body'
+import { LivLivError } from './errors'
 
 export const PNG_SLOTS = [
   { id: 'closed', label: 'Mouth closed', need: true },
@@ -22,7 +23,7 @@ export class PngBody implements Body {
 
   attach(canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')
-    if (!this.g) throw new Error('LivLiv: this canvas already draws with WebGL (a Player or a VRM): a PNGTuber needs a canvas of its own')
+    if (!this.g) throw new LivLivError('canvas-in-use', 'LivLiv: this canvas already draws with WebGL (a Player or a VRM): a PNGTuber needs a canvas of its own')
   }
 
   async load(files: Map<string, Blob>) {
@@ -34,11 +35,11 @@ export class PngBody implements Body {
       for (const [file, blob] of files) {
         const slot = PNG_SLOTS.find((s) => file.replace(/\.[^.]*$/, '').toLowerCase() === s.id)?.id
         if (!slot) continue
-        const b = await createImageBitmap(blob).catch(() => { throw new Error(`LivLiv: ${file} is not an image this browser can read`) })
+        const b = await createImageBitmap(blob).catch(() => { throw new LivLivError('invalid', `LivLiv: ${file} is not an image this browser can read`) })
         pics[slot] = b
-        if (b.width > MAX_SIDE || b.height > MAX_SIDE || (pixels += b.width * b.height) > MAX_PIXELS) throw new Error(`LivLiv: ${file} is too large (${b.width} x ${b.height})`)
+        if (b.width > MAX_SIDE || b.height > MAX_SIDE || (pixels += b.width * b.height) > MAX_PIXELS) throw new LivLivError('too-large', `LivLiv: ${file} is too large (${b.width} x ${b.height})`)
       }
-      if (!pics.closed || !pics.open) throw new Error('LivLiv: a PNGTuber needs at least the closed and the open picture')
+      if (!pics.closed || !pics.open) throw new LivLivError('missing-file', 'LivLiv: a PNGTuber needs at least the closed and the open picture')
       const txt = files.get('name.txt')
       if (txt) name = (await txt.slice(0, 200).text()).trim() || name
     } catch (e) {

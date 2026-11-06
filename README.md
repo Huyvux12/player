@@ -83,9 +83,9 @@ LivLiv's mascot. The terms are in [characters/LICENSE.md](characters/LICENSE.md)
 Kujira, Kujira Q and Pen come from other people's work: that licence and that credit don't cover them. Their sources,
 credits and terms are in [characters/CREDITS.md](characters/CREDITS.md).
 
-Each also has a `cover.webp` (512 x 768, about 50 KB), its first frame without the mark. Show it under the canvas with
-`object-fit: contain` and fade the character in over it, as [example/loading.js](example/loading.js) does: the page has a
-picture at once, and nothing jumps.
+Each also has a `cover.webp` (512 x 768, about 50 KB), its first frame without the mark. `player.load(source, { poster })`
+shows it on the canvas until the first frame. To have it before any script has run, put it under the canvas with
+`object-fit: contain` and fade the character in over it, as [example/loading.js](example/loading.js) does.
 
 | id | name | id | name | id | name |
 |---|---|---|---|---|---|

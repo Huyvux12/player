@@ -41,6 +41,9 @@ export const LIMITS = {
    *  the layers bent by chains times how many bend them. The heaviest of 111 models here: 46 000 and 40 000 */
   vertices: 2 ** 21, skinned: 2 ** 20,
 }
+/** an error a player can tell apart by its `code` (the SDK's LivLivError); livliv.ai reads only the words */
+export const coded = (code: string, message: string) => Object.assign(new Error(message), { code })
+
 /** no number in a model comes near this; past it sums overflow to Infinity and then NaN, and the character is gone */
 const BIG = 1e6
 const GROUPS = ['head', 'body', 'hair_back', 'hair_side', 'hair_front', 'hair_inner']
@@ -56,23 +59,23 @@ const read = new WeakSet<object>()
  *  expressions' `label` from their names by language (all of them stay in `labels`). Reading a result again returns
  *  it as it is */
 export function readModel(raw: unknown, lang = uiLang()): ModelDef {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('not a LivLiv model (model.json is not an object)')
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw coded('not-a-model', 'not a LivLiv model (model.json is not an object)')
   if (read.has(raw)) return raw as ModelDef
   const m = raw as Record<string, unknown>
   if (m.format === undefined || m.format === LEGACY_FORMAT) {
     const v = (m.version as number | undefined) ?? LEGACY_VERSION
-    if (v > LEGACY_VERSION) throw new Error(`this model says format "${LEGACY_FORMAT}" version ${v}, which never existed`)
+    if (v > LEGACY_VERSION) throw coded('not-a-model', `this model says format "${LEGACY_FORMAT}" version ${v}, which never existed`)
     check(m as unknown as ModelDef)
     read.add(m)
     return m as unknown as ModelDef
   }
-  if (m.format !== FORMAT) throw new Error(`not a LivLiv model (format "${String(m.format)}")`)
+  if (m.format !== FORMAT) throw coded('not-a-model', `not a LivLiv model (format "${String(m.format)}")`)
   const v = m.version as number
   if (typeof v !== 'number' || v > FORMAT_VERSION) {
-    throw new Error(`this model is format version ${v}; this player reads up to ${FORMAT_VERSION}: update the player`)
+    throw coded('newer-format', `this model is format version ${v}; this player reads up to ${FORMAT_VERSION}: update the player`)
   }
   const missing = ((m.requires as string[] | undefined) || []).filter((f) => !FEATURES.includes(f))
-  if (missing.length) throw new Error(`this model needs ${missing.join(', ')}, which this player does not have: update the player`)
+  if (missing.length) throw coded('missing-feature', `this model needs ${missing.join(', ')}, which this player does not have: update the player`)
   const out = lower(m as unknown as V4, lang)
   check(out)
   read.add(out)
@@ -82,7 +85,7 @@ export function readModel(raw: unknown, lang = uiLang()): ModelDef {
 /** what any model must be before it is drawn, whatever wrote it: sizes and counts in range (LIMITS), numbers finite,
  *  every image and file a path inside the package. Throws on the first thing wrong */
 function check(m: ModelDef) {
-  const bad = (why: string): never => { throw new Error(`this model is not valid: ${why}`) }
+  const bad = (why: string, code = 'invalid'): never => { throw coded(code, `this model is not valid: ${why}`) }
   const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
   const list = (v: unknown, most: number, what: string) => {
     if (v === undefined) return []
@@ -90,9 +93,9 @@ function check(m: ModelDef) {
     return v as unknown[]
   }
   const [w = NaN, h = NaN] = Array.isArray(m.canvas) ? m.canvas : []
-  if (!(num(w) && num(h) && w > 0 && h > 0 && w <= LIMITS.canvas && h <= LIMITS.canvas)) bad(`its canvas ${w} x ${h} is out of range`)
+  if (!(num(w) && num(h) && w > 0 && h > 0 && w <= LIMITS.canvas && h <= LIMITS.canvas)) bad(`its canvas ${w} x ${h} is out of range`, w > LIMITS.canvas || h > LIMITS.canvas ? 'too-large' : 'invalid')
   if (!Array.isArray(m.layers) || !m.layers.length) bad('it has no layers')
-  if (m.layers.length > LIMITS.layers) bad(`it has ${m.layers.length} layers, more than ${LIMITS.layers}`)
+  if (m.layers.length > LIMITS.layers) bad(`it has ${m.layers.length} layers, more than ${LIMITS.layers}`, 'too-large')
   const A = m.anchors, hd = A?.head, inRange = (v: unknown) => num(v) && Math.abs(v) <= BIG
   if (!hd || ![hd.cx, hd.cy, hd.rx, hd.ry, A.neck_y, A.top_y, A.bottom_y, A.hair_root_y].every(inRange) || !(hd.rx > 1e-3 && hd.ry > 1e-3)
     || !Array.isArray(A.face) || A.face.length !== 4 || !A.face.every(inRange)) bad('its anchors are missing or not numbers')
@@ -174,9 +177,9 @@ function check(m: ModelDef) {
     skinned += verts * (bones.length + (overBangs && Array.isArray(bangs) ? bangs.length : 0))
     if (overBangs) read += L.w * L.h
   }
-  if (vertices > LIMITS.vertices) bad(`its layers' meshes would have ${vertices} vertices, more than ${LIMITS.vertices}`)
-  if (skinned > LIMITS.skinned) bad(`its chains would bend ${skinned} vertices, more than ${LIMITS.skinned}`)
-  if (read > LIMITS.texels) bad(`its brows layers cover ${read} pixels, more than ${LIMITS.texels}`)
+  if (vertices > LIMITS.vertices) bad(`its layers' meshes would have ${vertices} vertices, more than ${LIMITS.vertices}`, 'too-large')
+  if (skinned > LIMITS.skinned) bad(`its chains would bend ${skinned} vertices, more than ${LIMITS.skinned}`, 'too-large')
+  if (read > LIMITS.texels) bad(`its brows layers cover ${read} pixels, more than ${LIMITS.texels}`, 'too-large')
   for (const e of list(m.expressions, LIMITS.expressions, 'expressions') as ({ id?: unknown } | null)[]) if (!e || typeof e.id !== 'string') bad('an expression has no id')
   if (m.keyforms !== undefined && (typeof m.keyforms !== 'string' || !FILE.test(m.keyforms))) bad('keyforms is not a path inside the package')
   if (m.watermark != null && typeof m.watermark !== 'string') bad('its watermark is not text')
@@ -191,17 +194,17 @@ interface V4 {
 }
 
 function lower(m: V4, lang: string): ModelDef {
-  if (!Array.isArray(m.layers) || !m.layers.length) throw new Error('this model has no layers')
-  if (m.layers.length > LIMITS.layers) throw new Error(`this model has ${m.layers.length} layers, more than ${LIMITS.layers}`)
+  if (!Array.isArray(m.layers) || !m.layers.length) throw coded('invalid', 'this model has no layers')
+  if (m.layers.length > LIMITS.layers) throw coded('too-large', `this model has ${m.layers.length} layers, more than ${LIMITS.layers}`)
   const [w, h] = m.canvas || []
-  if (!(w > 0 && h > 0 && w <= LIMITS.canvas && h <= LIMITS.canvas)) throw new Error(`this model's canvas ${w} x ${h} is out of range`)
+  if (!(w > 0 && h > 0 && w <= LIMITS.canvas && h <= LIMITS.canvas)) throw coded(w > LIMITS.canvas || h > LIMITS.canvas ? 'too-large' : 'invalid', `this model's canvas ${w} x ${h} is out of range`)
   for (const L of m.layers) {
     for (const p of [L.texture, ...(L.frames || []), L.mask, L.talk, L.brow_tex]) {
-      if (p !== undefined && !IMAGE.test(p)) throw new Error(`layer ${L.id}: "${p}" is not an image path of the package`)
+      if (p !== undefined && !IMAGE.test(p)) throw coded('invalid', `layer ${L.id}: "${p}" is not an image path of the package`)
     }
   }
   for (const [k, p] of Object.entries(m.files || {})) {
-    if (!k.startsWith('x-') && (typeof p !== 'string' || !FILE.test(p))) throw new Error(`files.${k}: "${p}" is not a path in the package`)
+    if (!k.startsWith('x-') && (typeof p !== 'string' || !FILE.test(p))) throw coded('invalid', `files.${k}: "${p}" is not a path in the package`)
   }
   const layers = m.layers.map(({ label, expression, ...L }) =>
     ({ ...L, depth: L.depth ?? 0, name: label ? pickLabel(label, 'en', L.id) : L.id, ...(expression ? { param: expression } : {}) }) as LayerDef)

@@ -9,6 +9,7 @@ import type * as T from 'three'
 import type { VRM } from '@pixiv/three-vrm'
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { Body, BodyExpression, BodyMeta, Pose } from './body'
+import { LivLivError, type LivLivErrorCode } from './errors'
 
 const FEELINGS = ['happy', 'angry', 'sad', 'relaxed', 'surprised'] as const
 const LABELS: Record<(typeof FEELINGS)[number], Record<string, string>> = {
@@ -60,6 +61,7 @@ export class VrmBody implements Body {
   private scene!: T.Scene
   private camera!: T.PerspectiveCamera
   private renderer: T.WebGLRenderer | null = null
+  private gl: WebGL2RenderingContext | null = null
   private bones: Partial<Record<'head' | 'neck' | 'spine' | 'chest', T.Object3D>> = {}
   /** the framing: the world height shown (m), and its center */
   private frame = { height: 1, y: 1 }
@@ -72,18 +74,21 @@ export class VrmBody implements Body {
 
   attach(canvas: HTMLCanvasElement) {
     // the attributes render() gives three.js, which then finds this same context
-    if (!canvas.getContext('webgl2', { alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true })) {
-      throw new Error('LivLiv: a VRM needs WebGL2: this browser has none, or this canvas already draws in 2D (a PNGTuber)')
-    }
+    const gl = canvas.getContext('webgl2', { alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true })
+    if (!gl) throw new LivLivError('no-webgl', 'LivLiv: a VRM needs WebGL2: this browser has none, or this canvas already draws in 2D (a PNGTuber)')
+    this.gl = gl
+    if (gl.isContextLost()) throw new LivLivError('context-lost', 'LivLiv: this canvas has lost its WebGL context: use a new canvas')
   }
+
+  context() { return this.gl }
 
   async load(files: Map<string, Blob>) {
     const entry = [...files].find(([n]) => /\.(vrm|glb)$/i.test(n))
-    if (!entry) throw new Error('LivLiv: no .vrm file among the files')
+    if (!entry) throw new LivLivError('missing-file', 'LivLiv: no .vrm file among the files')
     await checkGlb(entry[1], entry[0], !this.options.configureLoader)
     const [THREE, { GLTFLoader }, { VRMLoaderPlugin, VRMUtils }] = await Promise.all([
       import('three'), import('three/examples/jsm/loaders/GLTFLoader.js'), import('@pixiv/three-vrm')]).catch((e) => {
-      throw new Error(`LivLiv: could not load three or @pixiv/three-vrm, which a VRM needs: are they installed, and can this page reach them? (${(e as Error).message})`)
+      throw new LivLivError('unreachable', `LivLiv: could not load three or @pixiv/three-vrm, which a VRM needs: are they installed, and can this page reach them? (${(e as Error).message})`)
     })
     this.THREE = THREE
     const loader = new GLTFLoader()
@@ -94,20 +99,20 @@ export class VrmBody implements Body {
     try {
       gltf = await loader.loadAsync(url)
     } catch (e) {
-      throw new Error(`LivLiv: ${entry[0]} is not a VRM this player can read (${(e as Error).message})`)
+      throw new LivLivError('not-a-model', `LivLiv: ${entry[0]} is not a VRM this player can read (${(e as Error).message})`, { cause: e })
     } finally {
       URL.revokeObjectURL(url)
     }
     const vrm = gltf.userData.vrm as VRM | undefined
     if (!vrm) {
       VRMUtils.deepDispose(gltf.scene)
-      throw new Error(`LivLiv: ${entry[0]} is a glTF without VRM data (exported as plain glTF? VRM exporters write a .vrm)`)
+      throw new LivLivError('not-a-model', `LivLiv: ${entry[0]} is a glTF without VRM data (exported as plain glTF? VRM exporters write a .vrm)`)
     }
     let meshes = 0
     vrm.scene.traverse((o) => { if ((o as T.Mesh).isMesh) meshes++ })
     if (!meshes) {
       VRMUtils.deepDispose(gltf.scene)
-      throw new Error(`LivLiv: ${entry[0]} has a skeleton but no mesh, so there is nothing to draw (export the armature together with its meshes)`)
+      throw new LivLivError('invalid', `LivLiv: ${entry[0]} has a skeleton but no mesh, so there is nothing to draw (export the armature together with its meshes)`)
     }
     // the new character, apart from the one shown (a failed load leaves that on the canvas): it takes over at the end
     VRMUtils.removeUnnecessaryVertices(gltf.scene)
@@ -272,13 +277,13 @@ const COMPRESSED: Record<string, string> = { KHR_draco_mesh_compression: 'Draco'
  *  fetch them), its compression one the page can decode, and images and meshes within VRM_LIMITS, read from the file's
  *  headers before anything is decoded */
 async function checkGlb(file: Blob, name: string, noDecoders: boolean) {
-  const bad = (why: string): never => { throw new Error(`LivLiv: ${name} ${why}`) }
+  const bad = (why: string, code: LivLivErrorCode = 'invalid'): never => { throw new LivLivError(code, `LivLiv: ${name} ${why}`) }
   const head = new DataView(await file.slice(0, 20).arrayBuffer())
-  if (head.byteLength < 20 || head.getUint32(0, true) !== 0x46546c67) bad('is not a VRM: it should begin as a binary glTF does')
-  if (head.getUint32(4, true) !== 2) bad(`is a glTF of version ${head.getUint32(4, true)}, and VRM uses 2`)
+  if (head.byteLength < 20 || head.getUint32(0, true) !== 0x46546c67) bad('is not a VRM: it should begin as a binary glTF does', 'not-a-model')
+  if (head.getUint32(4, true) !== 2) bad(`is a glTF of version ${head.getUint32(4, true)}, and VRM uses 2`, 'not-a-model')
   const jsonLen = head.getUint32(12, true)
   if (head.getUint32(16, true) !== 0x4e4f534a) bad('is damaged (no JSON where a binary glTF has it)')
-  if (jsonLen > VRM_LIMITS.json) bad(`is not one this player reads: its JSON has ${jsonLen} bytes, more than ${VRM_LIMITS.json}`)
+  if (jsonLen > VRM_LIMITS.json) bad(`is not one this player reads: its JSON has ${jsonLen} bytes, more than ${VRM_LIMITS.json}`, 'too-large')
   if (20 + jsonLen > file.size) bad('is damaged or cut short')
   let gltf: { buffers?: { uri?: string }[]; images?: { uri?: string; bufferView?: number }[]; bufferViews?: { byteOffset?: number; byteLength?: number }[]
     accessors?: { count?: number }[]; meshes?: { primitives?: { attributes?: { POSITION?: number } }[] }[]; extensionsUsed?: string[] }
@@ -288,14 +293,14 @@ async function checkGlb(file: Blob, name: string, noDecoders: boolean) {
   }
   if (noDecoders) {
     for (const [ext, what] of Object.entries(COMPRESSED)) {
-      if (gltf.extensionsUsed?.includes(ext)) bad(`is compressed with ${what}, and this page has no decoder for that. Export it uncompressed, or pass VrmBody a configureLoader`)
+      if (gltf.extensionsUsed?.includes(ext)) bad(`is compressed with ${what}, and this page has no decoder for that. Export it uncompressed, or pass VrmBody a configureLoader`, 'missing-feature')
     }
   }
   const positions = new Set<number>()
   for (const m of gltf.meshes ?? []) for (const p of m?.primitives ?? []) if (typeof p?.attributes?.POSITION === 'number') positions.add(p.attributes.POSITION)
   let vertices = 0
   for (const i of positions) vertices += gltf.accessors?.[i]?.count ?? 0
-  if (vertices > VRM_LIMITS.vertices) bad(`has ${vertices} vertices, more than ${VRM_LIMITS.vertices}`)
+  if (vertices > VRM_LIMITS.vertices) bad(`has ${vertices} vertices, more than ${VRM_LIMITS.vertices}`, 'too-large')
   // where the binary chunk starts, and each picture's size from its first bytes
   const binary = 20 + jsonLen + 8
   let texels = 0
@@ -305,7 +310,7 @@ async function checkGlb(file: Blob, name: string, noDecoders: boolean) {
     const size = await pictureSize(file.slice(binary + (bv.byteOffset ?? 0), binary + (bv.byteOffset ?? 0) + (bv.byteLength ?? 0)))
     if (!size) continue
     if (size[0] > VRM_LIMITS.textureSide || size[1] > VRM_LIMITS.textureSide || (texels += size[0] * size[1]) > VRM_LIMITS.texels) {
-      bad(`has pictures too large for this player (${size[0]} x ${size[1]}; ${VRM_LIMITS.textureSide} px a side and ${VRM_LIMITS.texels} pixels in all at most)`)
+      bad(`has pictures too large for this player (${size[0]} x ${size[1]}; ${VRM_LIMITS.textureSide} px a side and ${VRM_LIMITS.texels} pixels in all at most)`, 'too-large')
     }
   }
 }

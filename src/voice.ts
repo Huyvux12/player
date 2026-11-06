@@ -7,7 +7,7 @@
 import { VoiceMeter } from './runtime/voice'
 import { SpeechPlayer } from './runtime/speech'
 import { TalkMotion } from './runtime/talk'
-import type { Driver, Host } from './index'
+import type { Driver, Host } from './base'
 
 export interface LipSyncOptions {
   /** how much the voice also moves the head, brows and eyes: 0 (off) .. 2, default 1. Not while a face is tracked */

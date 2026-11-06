@@ -4,11 +4,13 @@
 // (bodies.html).
 //   npm run build && npm run test:browser
 // Needs a Chromium for playwright-core once: npx playwright-core install chromium-headless-shell
+// With an engine's name (firefox, webkit: npm run test:engines), a small sample on that browser's engine: what the three
+// engines might do differently (loads replaced, the context lost and given up, the poster, the contract of the two classes).
 import { createServer } from 'node:http'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright-core'
+import { chromium, firefox, webkit } from 'playwright-core'
 import { crc32, deflateSync } from 'node:zlib'
 import { tinyVrm } from './tiny-vrm.mjs'
 
@@ -40,6 +42,30 @@ const bomb = bombPng()
 const slowModel = { asked: 0, finished: 0 }
 /** requests per route of runDropped */
 const dropped = {}
+/** the slow routes (runLoads): how many were asked for, ran to the end, were closed before it */
+const slow = { asked: 0, finished: 0, cut: 0 }
+const slowly = (res, b, headers, ms = 40, parts = 25) => {
+  slow.asked++
+  res.writeHead(200, { 'content-type': 'application/octet-stream', ...headers })
+  let i = 0
+  const tick = setInterval(() => {
+    res.write(b.subarray(Math.floor((i * b.length) / parts), Math.floor(((i + 1) * b.length) / parts)))
+    if (++i === parts) { clearInterval(tick); slow.finished++; res.end() }
+  }, ms)
+  res.on('close', () => { if (i < parts) { slow.cut++; clearInterval(tick) } })
+}
+/** a PNG of one colour */
+function solidPng(hex, side = 8) {
+  const chunk = (type, data) => {
+    const b = Buffer.alloc(12 + data.length), t = Buffer.concat([Buffer.from(type), data])
+    b.writeUInt32BE(data.length, 0); t.copy(b, 4); b.writeUInt32BE(crc32(t), 8 + data.length)
+    return b
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(side, 0); ihdr.writeUInt32BE(side, 4); ihdr[8] = 8; ihdr[9] = 2
+  const line = Buffer.concat([Buffer.from([0]), ...Array.from({ length: side }, () => Buffer.from(hex, 'hex'))])
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: side }, () => line)))), chunk('IEND', Buffer.alloc(0))])
+}
 const server = createServer((req, res) => {
   if (req.url.startsWith('/__model.task')) {
     slowModel.asked++
@@ -53,6 +79,14 @@ const server = createServer((req, res) => {
     res.on('close', () => clearInterval(tick))
     return
   }
+  const taking = req.url.match(/^\/__slow(-nosize)?\/(.+)\.livliv$/)
+  if (taking) {
+    const b = readFileSync(join(chars, `${taking[2]}.livliv`))
+    slowly(res, b, taking[1] ? {} : { 'content-length': b.length })
+    return
+  }
+  const picture = req.url.match(/^\/__slow-png\/(\w+)\.png$/)
+  if (picture) { const b = solidPng(picture[1]); slowly(res, b, { 'content-type': 'image/png', 'content-length': b.length }, 60, 5); return }
   const drop = req.url.match(/^\/__dropped\/(once|always|missing)\/(.+)\.livliv$/)
   if (drop) {
     const [, how, id] = drop, n = (dropped[how] = (dropped[how] || 0) + 1)
@@ -77,6 +111,53 @@ const server = createServer((req, res) => {
 })
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
 
+const engine = process.argv[2]
+if (engine) {
+  const browser = await ({ firefox, webkit }[engine]).launch(engine === 'firefox' ? { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false } } : {})
+  let failedHere = 0
+  const check = (ok, what) => { if (!ok) failedHere++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${engine}: ${what}`) }
+  try {
+    const ctx = await browser.newContext({ permissions: [] }), page = await ctx.newPage()
+    const errors = []
+    page.on('pageerror', (e) => errors.push(e.message))
+    await page.goto(`http://127.0.0.1:${server.address().port}/test/smoke.html`)
+    await page.waitForFunction(() => typeof window.run === 'function')
+    const chosen = ids.slice(0, 3), nameIn = (id) => JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')).name
+    await page.evaluate((f) => window.setFiles(f), files)
+    const r = await page.evaluate((a) => window.runLoads(a), chosen)
+    check(r.row.first === 'AbortError' && r.row.second === 'AbortError' && r.row.third === nameIn(chosen[2]) && r.row.shown === nameIn(chosen[2]) && r.row.went === 1, `the last of three loads plays, once: ${JSON.stringify(r.row)}`)
+    // (WebKit may keep the connection of a download called off)
+    if (engine !== 'webkit') check(slow.cut >= 2, `the replaced downloads stop: ${slow.cut} cut`)
+    check(r.quiet === 0 && r.loud.join() === 'http', `nobody catching: replaced ${r.quiet}, a real error ${r.loud}`)
+    check(r.already.said === 'AbortError' && r.already.running === nameIn(chosen[0]), 'a signal already aborted leaves the running load alone')
+    check(r.own.said === 'AbortError' && r.own.kept && r.reason === 'my reason', "one's own signal")
+    const rising = (steps) => { const d = steps.filter((s) => s.step === 'download').map((s) => s.progress); return d.every((v, i) => !i || v > d[i - 1]) && d.at(-1) === 1 && steps.at(-1).step === 'build' }
+    check(rising(r.progress.package) && rising(r.progress.unknown) && rising(r.progress.folder), `progress rises to 1: ${r.progress.package.length} steps`)
+    check(r.disposed[0] === 'AbortError', 'disposed while it runs')
+    const q = await page.evaluate((id) => window.runPoster(id), chosen[0])
+    check(/cover\.webp/.test(q.during.image) && q.same && q.over === 'none' && q.failed === 'none' && q.replaced === 'none' && q.disposed === 'none', 'the poster, and the background back after')
+    // (only Chromium and Firefox get room back from a released context; Firefox has not been seen to drop one by count)
+    const x = await page.evaluate(([id, big]) => window.runContext(id, big), [chosen[0], engine === 'firefox'])
+    check(x.before === false && x.lost === true && x.told === 1 && x.running === 'context-lost' && x.load === 'context-lost' && x.snapshot === 'string', `the context lost: told ${x.told}, a load ${x.load}`)
+    check(x.nextTask === true && x.releasedTold === 0 && x.reuse === 'released', `released: gone next task ${x.nextTask}, the canvas says ${x.reuse}`)
+    check(x.remount.lost === false && x.remount.loaded === true && x.remount.share > 0.05, `unmount and mount in one task: ${JSON.stringify(x.remount)}`)
+    if (engine === 'firefox') check(x.withRelease.lost === false, '40 players came and went with release: the one that stays stays')
+    await page.goto(`http://127.0.0.1:${server.address().port}/test/bodies.html`)
+    await page.waitForFunction(() => typeof window.runBodies === 'function')
+    for (const kind of ['player', 'png']) {
+      const c = await page.evaluate(([k, id]) => window.runContract(k, id), [kind, chosen[0]])
+      check(c.snapshot && c.clamped.join() === '30,0' && c.nan.join() === '0,1,0' && c.failed === 'refused' && c.kept && c.after === null && c.away < 0.05 && c.back > 0.9, `the contract, ${kind}: ${c.name}`)
+    }
+    const b = await page.evaluate(() => window.runBodyLoads())
+    check(b.row.a === 'AbortError' && b.row.b === 'AbortError' && b.row.last === 'loaded' && b.held.d === 'd' && b.held.calls.join() === 'a,d', 'a BodyPlayer, several loads')
+    const v = await page.evaluate(() => window.runBodyContext())
+    check(v.vrm.told === 1 && v.vrm.load === 'context-lost' && v.vrmReleased.reuse === 'released' && !!v.png.again, 'a BodyPlayer, the context')
+    check(!errors.length, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
+  } finally { await browser.close(); server.close() }
+  console.log(failedHere ? `smoke ${engine}: ${failedHere} failed` : `smoke ${engine}: ok`)
+  process.exit(failedHere ? 1 : 0)
+}
+
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
   '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] })
 let failed = 0
@@ -86,7 +167,10 @@ try {
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto(`http://127.0.0.1:${server.address().port}/test/smoke.html`)
   await page.waitForFunction(() => typeof window.run === 'function')
-  const { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder } = await page.evaluate((a) => window.run(a), { ids, files })
+  const { out, fromFiles, newer, legacy, packaged, vrmHere, vrmFolder, codes } = await page.evaluate((a) => window.run(a), { ids, files })
+  const codesOk = Object.entries(codes).every(([want, got]) => want.split(' ')[0] === got)
+  if (!codesOk) failed++
+  console.log(`${codesOk ? 'ok  ' : 'FAIL'} what a load rejects with says what went wrong: ${Object.entries(codes).map(([k, v]) => (k.split(' ')[0] === v ? v : `${k}: ${v}`)).join(', ')}`)
   const vrmHereOk = /BodyPlayer/.test(vrmHere) && /BodyPlayer/.test(vrmFolder)
   if (!vrmHereOk) failed++
   console.log(`${vrmHereOk ? 'ok  ' : 'FAIL'} a VRM handed to a Player: ${vrmHere}`)
@@ -115,14 +199,25 @@ try {
   const kfId = ids.find((id) => JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')).files?.keyforms) ?? ids[0]
   const hostile = await page.evaluate(([a, b]) => window.runHostile(a, b), [ids[0], kfId])
   const why = { bomb: /too large/, path: /not an image path|not a path/, canvas: /canvas/, box: /box/, json: /not a model\.json/, layers: /layers/, mesh: /vertices/, chain: /no id/, browLine: /brow line/, rig: /rig\.roll/ }
+  const code = { bomb: 'too-large', path: 'invalid', canvas: 'too-large', box: 'invalid', json: 'not-a-model', layers: 'too-large', mesh: 'too-large', chain: 'invalid', browLine: 'invalid', rig: 'invalid' }
   for (const [k, re] of Object.entries(why)) {
-    const r = hostile[k], ok = !r.loaded && re.test(r.refused) && !!r.kept
+    const r = hostile[k], ok = !r.loaded && re.test(r.refused) && !!r.kept && r.code === code[k]
     if (!ok) failed++
     console.log(`${ok ? 'ok  ' : 'FAIL'} refuses ${k}: ${r.loaded ? 'it loaded' : r.refused.slice(0, 110)} (kept: ${r.kept})`)
   }
   const kfOk = hostile.keyforms.loaded && hostile.keyforms.share > 0.05
   if (!kfOk) failed++
   console.log(`${kfOk ? 'ok  ' : 'FAIL'} broken keyforms: ${hostile.keyforms.refused ?? `${hostile.keyforms.name} plays on the rig alone`}`)
+
+  // a model that breaks while it is built (see runKeep): the character before stays, to the pixel
+  const has = (test) => ids.find((id) => test(JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')), id))
+  const rigged = has((m) => m.rig?.chains?.length && m.files?.keyforms) ?? kfId
+  const chained = has((m, id) => m.rig?.chains?.length && id !== rigged) ?? ids[0]
+  const keep = await page.evaluate(([a, b]) => window.runKeep(a, b), [chained, rigged])
+  const { none: noFail, left: keepLeft, ...failures } = keep
+  const keepOk = noFail.differ === 0 && Object.values(keepLeft).every((n) => n <= 0) && Object.values(failures).every((r) => r.said && r.reached && r.differ === 0 && r.sameFields && r.sameGpu && !/^refused/.test(r.next) && r.glError === 0)
+  if (!keepOk) failed++
+  console.log(`${keepOk ? 'ok  ' : 'FAIL'} a model breaks while it is built (${rigged} over ${chained}): ${Object.entries(failures).map(([k, r]) => `${k}: ${r.reached ? '' : 'NOT REACHED '}${r.differ} values differ${r.sameFields ? '' : ', FIELDS changed'}${r.sameGpu ? '' : ', GPU changed'}${/^refused/.test(r.next) ? `, then ${r.next}` : ''}${r.glError ? `, GL error ${r.glError}` : ''}`).join('; ')}${keepOk ? '' : `; with no failure ${noFail.differ}; left ${JSON.stringify(keepLeft)}`}`)
 
   // random changes to a model.json in the real player (see runFuzz): the seeds of a run are the same every time
   const fuzzed = await page.evaluate(([a, b]) => window.runFuzz(a, b, 1, 150), [ids.find((i) => i === 'k02') ?? ids[0], ids[0]])
@@ -132,13 +227,58 @@ try {
   // a package whose connection drops (see runDropped)
   const drops = await page.evaluate((id) => window.runDropped(id), ids[0])
   const dropsOk = /^played/.test(drops.once) && dropped.once === 2 && /could not load/.test(drops.always) && !/Failed to fetch/.test(drops.always) && dropped.always === 2
-    && /HTTP 404/.test(drops.missing) && dropped.missing === 1
+    && /HTTP 404/.test(drops.missing) && dropped.missing === 1 && JSON.stringify(drops.said) === JSON.stringify([['unreachable', null], ['http', 404]])
   if (!dropsOk) failed++
   console.log(`${dropsOk ? 'ok  ' : 'FAIL'} a package's connection drops: once "${drops.once}" (${dropped.once} requests), always "${drops.always.slice(0, 60)}…" (${dropped.always}), a 404 "${drops.missing.slice(0, 50)}…" (${dropped.missing})`)
 
+  // several loads at once, called off, how far they have come (see runLoads)
+  {
+    const chosen = ids.slice(0, 3)
+    const r = await page.evaluate((a) => window.runLoads(a), chosen)
+    const nameIn = (id) => JSON.parse(readFileSync(join(chars, id, 'model.json'), 'utf8')).name
+    const rising = (steps) => {
+      const d = steps.filter((s) => s.step === 'download').map((s) => s.progress)
+      return d.every((v, i) => !i || v > d[i - 1]) && d.at(-1) === 1 && steps.at(-1).step === 'build' && steps.filter((s) => s.step === 'build').length === 1
+    }
+    const checks = {
+      'only the last plays': r.row.first === 'AbortError' && r.row.second === 'AbortError' && r.row.third === nameIn(chosen[2]) && r.row.shown === nameIn(chosen[2]) && r.row.went === 1,
+      'the replaced downloads stop': slow.cut >= 2,
+      'nobody catching': r.quiet === 0 && r.loud.join() === 'http',
+      'a signal already aborted': r.already.said === 'AbortError' && r.already.running === nameIn(chosen[0]),
+      "one's own signal": r.own.said === 'AbortError' && r.own.kept && r.reason === 'my reason',
+      'progress': rising(r.progress.package) && r.progress.package.filter((s) => s.step === 'download').length > 5 && rising(r.progress.unknown) && rising(r.progress.folder) && r.progress.files.length === 1 && r.progress.files[0].step === 'build',
+      'a callback that throws': r.badCallback === nameIn(chosen[0]),
+      'dispose': r.disposed[0] === 'AbortError' && /disposed/.test(r.disposed[1]) && r.after === 'AbortError',
+    }
+    const wrong = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)
+    if (wrong.length) failed++
+    console.log(`${wrong.length ? 'FAIL' : 'ok  '} several loads, called off: ${wrong.length ? `${wrong.join(', ')}: ${JSON.stringify(r).slice(0, 900)}` : `${slow.cut} downloads stopped of ${slow.asked}; ${r.progress.package.length} steps from a package`}`)
+    const q = await page.evaluate((id) => window.runPoster(id), chosen[0])
+    const has = (v) => /cover\.webp/.test(v), posterOk = has(q.during.image) && q.during.size === 'contain' && q.during.repeat === 'no-repeat' && q.during.color === 'rgb(1, 2, 3)' && q.same
+      && q.over === 'none' && has(q.failing) && q.failed === 'none' && q.replaced === 'none' && q.disposed === 'none'
+    if (!posterOk) failed++
+    console.log(`${posterOk ? 'ok  ' : 'FAIL'} poster: shown until the first frame, the canvas's own background after${posterOk ? '' : `: ${JSON.stringify(q)}`}`)
+  }
+
+  // the context lost, and given up (see runContext)
+  {
+    const r = await page.evaluate((id) => window.runContext(id), ids[0])
+    const checks = {
+      lost: r.before === false && r.lost === true && r.told === 1,
+      'a load running': r.running === 'context-lost', 'a load after': r.load === 'context-lost', 'frames, a snapshot': r.snapshot === 'string', 'a new player on it': r.newOnLost === 'context-lost',
+      release: r.sameTask === false && r.nextTask === true && r.releasedTold === 0 && r.reuse === 'released',
+      'unmount and mount': r.remount.lost === false && r.remount.loaded === true && r.remount.told === 0 && r.remount.share > 0.05,
+      'with release, the one that stays stays': r.withRelease.lost === false && r.withRelease.told === 0,
+      'without, it is pushed out and told': r.withoutRelease.lost === true && r.withoutRelease.told === 1 && r.overLimitLoad === 'context-lost',
+    }
+    const wrong = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)
+    if (wrong.length) failed++
+    console.log(`${wrong.length ? 'FAIL' : 'ok  '} the context lost and given up${wrong.length ? `: ${wrong.join(', ')}: ${JSON.stringify(r)}` : ': told once, frames idle, loads say so; 40 players came and went beside one that stayed'}`)
+  }
+
   // disposing while something runs (see runLifecycle)
   const life = await page.evaluate((id) => window.runLifecycle(id), ids[0])
-  const lifeOk = /disposed/.test(life.load) && life.model === null && life.drawn === 0 && life.freed >= life.made && life.glError === 0
+  const lifeOk = /AbortError: .*disposed/.test(life.load) && life.model === null && life.drawn === 0 && life.freed >= life.made && life.glError === 0
     && life.driver === 1 && !!life.again && life.mic === 'ended' && life.supported === true
     && Object.values(life.left).every((n) => n <= 0)
   if (!lifeOk) failed++
@@ -190,6 +330,41 @@ try {
   if (!vaOk) failed++
   console.log(`${vaOk ? 'ok  ' : 'FAIL'} VRM, loaded again on a wide canvas: aspect ${vrmAgain?.aspect1}, ${vrmAgain?.aspect2}; a failed load kept ${vrmAgain?.kept}, covers ${(vrmAgain?.share * 100).toFixed(1)} %; on a 2D canvas: ${vrmOn2d}`)
   if (errors.length) { failed++; console.log(`FAIL page errors:\n  ${errors.join('\n  ')}`) }
+  // a BodyPlayer's loads (see runBodyLoads)
+  {
+    const r = await page.evaluate(() => window.runBodyLoads())
+    const blue = r.row.pixel[2] > 200 && r.row.pixel[0] < 50
+    const stepsOk = r.row.steps.at(-1).step === 'build' && r.row.steps.filter((s) => s.step === 'download').at(-1).progress === 1
+    const ok = r.row.a === 'AbortError' && r.row.b === 'AbortError' && r.row.last === 'loaded' && blue && stepsOk
+      && r.held.a === 'a' && r.held.b === 'AbortError' && r.held.d === 'd' && r.held.calls.join() === 'a,d' && r.held.shown === 'd'
+      && r.lateLost === false && r.lateLost2 === false && r.late2d === true && r.lateAgain === 'made'
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} BodyPlayer, several loads: ${ok ? 'the last plays; one already inside the Body finishes first' : JSON.stringify(r)}`)
+  }
+
+  // the context on a BodyPlayer (see runBodyContext)
+  {
+    const r = await page.evaluate(() => window.runBodyContext())
+    const ok = r.vrm.told === 1 && r.vrm.lost === true && r.vrm.load === 'context-lost' && r.vrmReleased.lost === true && r.vrmReleased.reuse === 'released'
+      && r.png.lost === false && !!r.png.again && r.png.again !== 'released'
+    if (!ok) failed++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} the context on a BodyPlayer${ok ? ': a VRM is told and released like a Player; a PNGTuber has none to lose' : `: ${JSON.stringify(r)}`}`)
+  }
+
+  // what both players promise alike (see runContract)
+  for (const kind of ['player', 'png']) {
+    const r = await page.evaluate(([k, id]) => window.runContract(k, id), [kind, has((m) => m.rig?.chains?.length) ?? ids[0]])
+    const near = (a, b) => Math.abs(a - b) < 1e-6
+    const problems = Object.entries({
+      'before a load': r.before === null && r.playing === false, 'model': r.name && r.expressions, 'pixel ratio': r.ratio.join() === '2,0.5,100,200', snapshot: r.snapshot,
+      'frame time': near(r.times[0], 0.01) && near(r.times[1], 0.02), frame: r.frame && r.removed, range: r.clamped.join() === '30,0', 'not a number': r.nan.join() === '0,1,0',
+      'from a driver': r.driver.join() === '0,1', alive: r.alive, away: r.away < 0.05 && r.back > 0.9 && /setAway/.test(r.oldAway),
+      ...(kind === 'player' ? { 'canvas to model': r.toModel, poke: r.poke[1] > 0 } : {}), expressions2: r.unknown === false && r.neutral === true, 'play and pause': r.plays === true && r.paused === false,
+      'failed load': r.failed === 'refused' && r.kept, disposed: r.after === null && /disposed/.test(r.disposedLoad) && r.gone === 1,
+    }).filter(([, ok]) => !ok).map(([k]) => k)
+    if (problems.length) failed++
+    console.log(`${problems.length ? 'FAIL' : 'ok  '} contract, ${kind}: ${problems.length ? `${problems.join(', ')}: ${JSON.stringify(r)}` : 'the same on both'}`)
+  }
   // a camera that is refused: the face model's download stops with it, unless someone asked for the model ahead of time
   await page.goto(`http://127.0.0.1:${server.address().port}/test/bodies.html`)
   await page.waitForFunction(() => typeof window.runBodies === 'function')
@@ -219,6 +394,41 @@ try {
     const faded = await p.waitForFunction(() => document.getElementById('cover').hidden && getComputedStyle(document.getElementById('stage')).opacity === '1', null, { timeout: 20000 }).then(() => true, () => false)
     if (!waited || !faded) failed++
     console.log(`${waited && faded ? 'ok  ' : 'FAIL'} example/${name}.html: cover first ${waited}, then the character ${faded}`)
+    await p.close()
+  }
+  // the example pages say so when the context is lost, on the first screen
+  {
+    const p = await browser.newPage()
+    await p.goto(`http://127.0.0.1:${server.address().port}/example/demo.html`)
+    const up = await p.waitForFunction(() => window.player?.model, null, { timeout: 20000 }).then(() => true, () => false)
+    await p.evaluate(() => window.player.canvas.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext())
+    const said = up && await p.waitForFunction(() => { const r = document.getElementById('lost')?.getBoundingClientRect(); return r && r.top >= 0 && r.bottom <= innerHeight }, null, { timeout: 5000 }).then(() => true, () => false)
+    if (!said) failed++
+    console.log(`${said ? 'ok  ' : 'FAIL'} example/demo.html: the context lost, the page says so`)
+    await p.close()
+  }
+  // React under StrictMode, which mounts everything twice (its files come from a CDN: without a connection, not tested)
+  {
+    const p = await browser.newPage(), said = []
+    p.on('pageerror', (e) => said.push(e.message))
+    await p.goto(`http://127.0.0.1:${server.address().port}/example/react.html`)
+    const up = await p.waitForFunction(() => document.getElementById('status')?.textContent && window.__react, null, { timeout: 20000 }).then(() => true, () => false)
+    if (!up) console.log('skip example/react.html: React did not come from the CDN')
+    else {
+      await p.waitForFunction(() => /·/.test(document.getElementById('status').textContent), null, { timeout: 20000 })
+      const first = await p.textContent('#status')
+      await p.click('#next')
+      await p.waitForFunction((before) => document.getElementById('status').textContent !== before, first, { timeout: 20000 })
+      const second = await p.textContent('#status'), kept = await p.evaluate(() => !document.querySelector('canvas').getContext('webgl2').isContextLost())
+      const gl = await p.evaluateHandle(() => document.querySelector('canvas').getContext('webgl2'))
+      await p.click('#toggle')
+      await p.waitForFunction(() => !document.querySelector('canvas'), null, { timeout: 5000 })
+      await new Promise((r) => setTimeout(r, 100))
+      const gone = await gl.evaluate((c) => c.isContextLost())
+      const ok = first !== second && kept && gone && !said.length && !/Error|LivLiv:/.test(second)
+      if (!ok) failed++
+      console.log(`${ok ? 'ok  ' : 'FAIL'} example/react.html under StrictMode: "${first}", then "${second}"; the context kept while mounted ${kept}, given up on unmount ${gone}${said.length ? `; errors ${said.join(' | ')}` : ''}`)
+    }
     await p.close()
   }
   // ?model=: never a request to another site, however it is written; the page's own files still open

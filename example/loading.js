@@ -24,7 +24,7 @@ export function loading(canvas, cover, source) {
   note.textContent = 'Loading…'
   note.style.cssText = 'position:absolute;z-index:1;left:50%;bottom:12%;transform:translateX(-50%);margin:0;padding:4px 10px;border-radius:8px;background:#000a;color:#fff;font:13px system-ui,sans-serif;pointer-events:none'
   const later = setTimeout(() => canvas.parentElement.append(note), url ? 800 : 150)
-  return () => {
+  const done = () => {
     waiting = false
     clearTimeout(later)
     note.remove()
@@ -34,6 +34,9 @@ export function loading(canvas, cover, source) {
     canvas.style.opacity = 1
     setTimeout(() => { if (me === latest) cover.hidden = true }, 300)
   }
+  /** for load()'s onProgress: how far the note says it has come */
+  done.progress = (p) => { note.textContent = p.step === 'download' && p.progress > 0 && p.progress < 1 ? `Loading… ${Math.round(p.progress * 100)} %` : 'Loading…' }
+  return done
 }
 
 /** Is this URL on the page's own site? ?model= opens nothing else: a link must not put someone else's file on this
@@ -52,12 +55,26 @@ export function needWebGL(Player) {
   throw new Error('no WebGL2')
 }
 
+/** When the browser takes the page's graphics away (a phone reclaiming memory, say), the character is gone from this canvas
+ *  for good. These pages say so and offer to start again; a page of your own can make a new canvas and a new player at once:
+ *  see "When the context is lost" in API.md. */
+export function watchContext(player) {
+  player.onContextLost = () => {
+    const note = document.createElement('button')
+    note.id = 'lost'
+    note.style.cssText = 'position:fixed;z-index:2;left:16px;right:16px;top:32px;padding:8px 12px;border:0;border-radius:8px;background:#000c;color:#fff;text-align:center;font:14px system-ui,sans-serif'
+    note.textContent = 'The browser took this page\'s graphics away. Tap to start again.'
+    note.onclick = () => location.reload()
+    document.body.append(note)
+  }
+}
+
 /** Loads a model, with a featured character's folder as the second chance when its package (one big file) does not come. */
-export async function loadWithFallback(player, source) {
+export async function loadWithFallback(player, source, options) {
   try {
-    return await player.load(source)
+    return await player.load(source, options)
   } catch (e) {
-    if (typeof source !== 'string' || !source.endsWith('.livliv')) throw e
-    return player.load(source.replace(/\.livliv$/, '/')).catch(() => { throw e })
+    if (e.name === 'AbortError' || typeof source !== 'string' || !source.endsWith('.livliv')) throw e  // another was picked meanwhile
+    return player.load(source.replace(/\.livliv$/, '/'), options).catch(() => { throw e })
   }
 }

@@ -14,6 +14,7 @@
   // Run by smoke.mjs: a PNGTuber shows the picture for each mouth / eye state, and follows the face tracker (its
   // synthetic trace) and a speech clip; a VRM (tiny-vrm.mjs, served by smoke.mjs) loads, draws, takes its expressions
   // and follows the face tracker.
+  import { Player } from '../dist/index.js'
   import { BodyPlayer } from '../dist/body.js'
   import { PngBody } from '../dist/png.js'
   import { VrmBody } from '../dist/vrm.js'
@@ -30,6 +31,8 @@
   const covered = (canvas) => { const d = read(canvas).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n / (d.length / 4) }
   const solid = (color) => { const c = new OffscreenCanvas(100, 120), x = c.getContext('2d'); x.fillStyle = color; x.fillRect(0, 0, 100, 120); return c.convertToBlob() }
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  /** until the condition holds, or some seconds: what a browser does next may take a while on a busy machine */
+  const until = async (cond, ms = 5000) => { for (const t0 = performance.now(); !cond() && performance.now() - t0 < ms;) await wait(10) }
   /** what the drivers did, seen by a driver that runs after them */
   const watch = (player) => {
     const seen = { tracked: false, mouth: 0, angle: 0 }
@@ -44,6 +47,197 @@
     b.setUint32(24, sr, true); b.setUint32(28, 2 * sr, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); s(36, 'data'); b.setUint32(40, 2 * n, true)
     for (let i = 0; i < n; i++) { const t = i / sr; b.setInt16(44 + 2 * i, 12000 * Math.sin(2 * Math.PI * 220 * t) * (Math.sin(Math.PI * 4 * t) > 0 ? 1 : 0.05), true) }
     return new Blob([b.buffer], { type: 'audio/wav' })
+  }
+
+  /** what Player and BodyPlayer promise alike: one test, run on both (see PlayerBase) */
+  window.runContract = async (kind, id) => {
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 200px; height: 240px'
+    document.body.append(c)
+    const options = { autoplay: false, followPointer: false, idle: false, maxPixelRatio: 2 }
+    const p = kind === 'player' ? new Player(c, options) : new BodyPlayer(c, new PngBody(), options)
+    const good = kind === 'player' ? `../characters/${id}.livliv` : new Map([['closed.png', await solid('#f00')], ['open.png', await solid('#0f0')]])
+    const bad = kind === 'player' ? new Map([['model.json', new Blob(['{'])]]) : new Map([['closed.png', await solid('#f00')]])
+    const out = { before: p.model, playing: p.playing }
+    const info = await p.load(good)
+    out.name = info.name === p.model?.name
+    out.expressions = p.expressions === info.expressions
+    // the pixel ratio can be read and changed
+    out.ratio = [p.maxPixelRatio]
+    p.maxPixelRatio = 0.5; p.resize(); out.ratio.push(p.maxPixelRatio, c.width)
+    p.maxPixelRatio = 2; p.resize(); out.ratio.push(c.width)
+    // a snapshot is the pose as it is now, on a paused player too
+    const a = p.snapshot()
+    p.params.mouthOpen = 1
+    const b = p.snapshot()
+    out.snapshot = a !== b && b.startsWith('data:image/png')
+    p.params.mouthOpen = 0
+    // what a driver gets; the time counts the frames before this one
+    const times = []
+    let frame = null
+    const remove = p.use({ update(f) { times.push(f.time); frame = f } })
+    p.draw(0.01); p.draw(0.02); p.draw(0.03)
+    out.times = [times[1] - times[0], times[2] - times[1]]
+    out.frame = !!frame.params && typeof frame.add === 'function' && frame.dt === 0.03 && 'x' in frame.move
+    remove()
+    p.draw(0.01)
+    out.removed = times.length === 3
+    // the pose stays in range, and what is no number is the default, whoever set it
+    const pose = () => p.frame.params
+    const P = p.params
+    P.angleX = 1e9; P.eyeLOpen = -5; p.draw(0.01); out.clamped = [pose().angleX, pose().eyeLOpen]
+    P.angleX = NaN; P.eyeLOpen = NaN; P.bodyX = 'x'; p.draw(0.01); out.nan = [pose().angleX, pose().eyeLOpen, pose().bodyX]
+    const undo = p.use({ order: 100, update(f) { f.params.angleY = NaN; f.params.mouthOpen = 7 } })
+    p.draw(0.01); out.driver = [pose().angleY, pose().mouthOpen]
+    undo()
+    Object.assign(P, { angleX: 0, eyeLOpen: 1, bodyX: 0 })
+    p.draw(0.01)
+    out.alive = kind === 'player' ? !p.puppet.layers.some((L) => Number.isNaN(L.out[0])) : true
+    // away is a switch, on both
+    p.setAway(true)
+    for (let i = 0; i < 90; i++) p.draw(1 / 30)
+    out.away = pose().eyeLOpen
+    p.setAway(false)
+    for (let i = 0; i < 90; i++) p.draw(1 / 30)
+    out.back = pose().eyeLOpen
+    out.oldAway = (() => { try { p.act('away'); return 'took it' } catch (e) { return e.message } })()
+    // the rest of the surface
+    out.unknown = p.setExpression('no-such-expression')
+    out.neutral = p.setExpression(null)
+    for (const a2 of ['nod', 'shake', 'tilt', 'hop', 'shy']) p.act(a2)
+    p.lookAt(0.5, 0.5); p.lookAt(null); p.blink(); p.draw(0.01)
+    p.play(); out.plays = p.playing; p.pause(); out.paused = p.playing
+    // Player alone: from the canvas to the model, and a flick
+    if (kind === 'player') {
+      const [mx, my] = p.canvasToModel(c.clientWidth / 2, c.clientHeight / 2), [mw, mh] = p.model.size
+      out.toModel = mx > 0 && my > 0 && mx < mw && my < mh
+      const R = p.puppet.chainRuns[0]?.R
+      out.poke = [p.poke(mx, my), R ? p.poke(R[R.length - 2], R[R.length - 1]) : -1]
+    }
+    // a load that fails keeps the character; a disposed player says so and takes nothing more
+    const name = p.model.name
+    out.failed = await p.load(bad).then(() => 'loaded', () => 'refused')
+    out.kept = p.model?.name === name
+    p.dispose(); p.dispose()
+    out.after = p.model
+    out.disposedLoad = await p.load(good).then(() => 'loaded', (e) => e.message)
+    let gone = 0
+    p.use({ update() {}, dispose() { gone++ } })
+    out.gone = gone
+    c.remove()
+    return out
+  }
+
+  /** BodyPlayer: several loads at once. Those still downloading or waiting stop; one already going in (inside the Body,
+   *  which cannot be stopped) finishes, and the newer one follows */
+  window.runBodyLoads = async () => {
+    const out = {}
+    const slow = (color) => ({ closed: `/__slow-png/${color}.png`, open: `/__slow-png/${color}.png` })
+    {
+      const c = document.createElement('canvas'), p = new BodyPlayer(c, new PngBody(), { autoplay: false, followPointer: false, idle: false })
+      c.style.cssText = 'width: 40px; height: 40px'
+      document.body.append(c)
+      const say = (e) => e.name
+      const a = p.load(slow('ff0000')).then(() => 'loaded', say)
+      await wait(60)
+      const b = p.load(slow('00ff00')).then(() => 'loaded', say)
+      await wait(60)
+      const steps = []
+      const last = await p.load(slow('0000ff'), { onProgress: (s) => steps.push(s) }).then(() => 'loaded', say)
+      out.row = { a: await a, b: await b, last, pixel: pixel(c, 20, 20), steps }
+      p.dispose(); c.remove()
+    }
+    {
+      // a Body holding its load: the page decides when it ends
+      const held = [], calls = []
+      const body = {
+        format: 'test',
+        load(files) { calls.push([...files.keys()][0]); return new Promise((res) => held.push(() => res({ name: [...files.keys()][0], expressions: [] }))) },
+        render() {}, head: () => ({ x: 0.5, y: 0.3, rx: 0.1, ry: 0.1 }), dispose() {},
+      }
+      const c = document.createElement('canvas'), p = new BodyPlayer(c, body, { autoplay: false, followPointer: false })
+      const file = (n) => new Map([[n, new Blob(['x'])]])
+      const a = p.load(file('a')).then((m) => m.name, (e) => e.name)
+      await wait(20)
+      const b = p.load(file('b')).then((m) => m.name, (e) => e.name)
+      const d = p.load(file('d')).then((m) => m.name, (e) => e.name)
+      await wait(20)
+      held.shift()()
+      out.held = { a: await a, b: await b }
+      await wait(20)
+      held.shift()()
+      out.held.d = await d
+      out.held.calls = calls
+      out.held.shown = p.model?.name
+      p.dispose()
+    }
+    {
+      // a Body that takes its 2D context only at its first frame: asking about the context must not start a WebGL one
+      const c = document.createElement('canvas')
+      c.style.cssText = 'width: 40px; height: 40px'
+      document.body.append(c)
+      let got = null
+      const body = {
+        format: 'late', async load() { return { name: 'late', expressions: [] } },
+        render(cv) { got = cv.getContext('2d') }, head: () => ({ x: 0.5, y: 0.3, rx: 0.1, ry: 0.1 }), dispose() {},
+      }
+      const p = new BodyPlayer(c, body, { autoplay: false, followPointer: false })
+      out.lateLost = p.contextLost
+      const going = p.load(new Map([['a', new Blob(['x'])]]))
+      out.lateLost2 = p.contextLost
+      await going
+      out.late2d = !!got
+      p.dispose({ release: true })
+      await wait(20)
+      out.lateAgain = (() => { try { new BodyPlayer(c, body, { autoplay: false }).dispose(); return 'made' } catch (e) { return e.code } })()
+      c.remove()
+    }
+    return out
+  }
+
+  /** the context on a BodyPlayer: a VRM is told and released like a Player; a PNGTuber has none to lose */
+  window.runBodyContext = async () => {
+    const out = {}
+    const code = (e) => e.code ?? e.name
+    {
+      const c = document.createElement('canvas'), p = new BodyPlayer(c, new VrmBody(), { followPointer: false })
+      c.style.cssText = 'width: 60px; height: 80px'
+      document.body.append(c)
+      let told = 0
+      p.onContextLost = () => told++
+      await p.load('/__tiny.vrm')
+      const gl = c.getContext('webgl2')
+      gl.getExtension('WEBGL_lose_context').loseContext()
+      await until(() => told)
+      out.vrm = { told, lost: p.contextLost, load: await p.load('/__tiny.vrm').then(() => 'loaded', code) }
+      p.dispose(); c.remove()
+    }
+    {
+      const c = document.createElement('canvas'), p = new BodyPlayer(c, new VrmBody(), { followPointer: false })
+      c.style.cssText = 'width: 60px; height: 80px'
+      document.body.append(c)
+      await p.load('/__tiny.vrm')
+      const gl = c.getContext('webgl2')
+      p.dispose({ release: true })
+      await until(() => gl.isContextLost())
+      out.vrmReleased = { lost: gl.isContextLost(), reuse: (() => { try { new BodyPlayer(c, new VrmBody()); return 'made' } catch (e) { return code(e) } })() }
+      c.remove()
+    }
+    {
+      const c = document.createElement('canvas')
+      c.style.cssText = 'width: 60px; height: 80px'
+      document.body.append(c)
+      const files = new Map([['closed.png', await solid('#f00')], ['open.png', await solid('#0f0')]])
+      const p = new BodyPlayer(c, new PngBody(), { autoplay: false, followPointer: false, idle: false })
+      await p.load(files)
+      out.png = { lost: p.contextLost }
+      p.dispose({ release: true })
+      await wait(30)
+      const q = new BodyPlayer(c, new PngBody(), { autoplay: false, followPointer: false, idle: false })
+      out.png.again = await q.load(files).then((m) => m.name, code)
+      q.dispose(); c.remove()
+    }
+    return out
   }
 
   /** the camera refused while the face model comes in (the slow route of smoke.mjs); ahead: it was asked for before */

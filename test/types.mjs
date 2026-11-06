@@ -16,10 +16,10 @@ fs.rmSync(dir, { recursive: true, force: true })
 fs.mkdirSync(path.join(dir, 'node_modules', path.dirname(name)), { recursive: true })
 fs.symlinkSync(root, path.join(dir, 'node_modules', name), 'dir')
 fs.writeFileSync(path.join(dir, 'use.ts'), `
-import { Player, VERSION, type Driver, type ModelInfo, type View } from '${name}'
+import { LivLivError, Player, VERSION, type ActionId, type Driver, type LivLivErrorCode, type LoadOptions, type LoadProgress, type ModelInfo, type View } from '${name}'
 import { preloadFaceModel, startFaceTracking, type FaceTracking } from '${name}/tracking'
 import { createSpeech, startLipSync, type LipSync } from '${name}/voice'
-import { BODY_LIMIT, BodyPlayer, type Body } from '${name}/body'
+import { BODY_LIMIT, BodyPlayer, LivLivError as FromBody, type Body } from '${name}/body'
 import { PngBody } from '${name}/png'
 import { VrmBody } from '${name}/vrm'
 declare const canvas: HTMLCanvasElement
@@ -32,7 +32,26 @@ const sync: Promise<LipSync> = startLipSync(player)
 const body: Body = new PngBody()
 player.use(driver)
 void [VERSION, model, view, tracking, sync, preloadFaceModel(), createSpeech(player), BODY_LIMIT, new BodyPlayer(canvas, body), new VrmBody()]
+const options: LoadOptions = { signal: new AbortController().signal, poster: '/cover.webp', onProgress: (p: LoadProgress) => void (p.step === 'download' ? p.progress : 0) }
+const again: Promise<ModelInfo> = player.load('/avatars/sena.livliv', options)
+const point: [number, number] = player.canvasToModel(1, 2)
+const moved: number = player.poke(point[0], point[1])
+const code: LivLivErrorCode | null = again instanceof LivLivError ? again.code : null
+const move: ActionId = 'nod'
+player.act(move)
+player.setAway(true)
+player.maxPixelRatio = 1
+void [moved, code, new FromBody('http', 'x', { status: 404 }).status]
 // the types are real, not any: these must be errors
+// @ts-expect-error a switch now: setAway
+player.act('away')
+// @ts-expect-error not part of the API
+void player.puppet
+// @ts-expect-error nor are the insides
+void player.frame
+// @ts-expect-error the codes are a list
+const nope: LivLivErrorCode = 'nope'
+void nope
 // @ts-expect-error not an action
 player.act('nope')
 // @ts-expect-error a name is text

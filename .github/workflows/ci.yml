@@ -23,3 +23,5 @@ jobs:
       - run: npm run test:types
       - run: npx playwright-core install --with-deps chromium-headless-shell
       - run: npm run test:browser
+      - run: npx playwright-core install --with-deps firefox webkit
+      - run: npm run test:engines

@@ -3,11 +3,14 @@
 // from Player: the idle motion, expressions, actions and drivers, so lip sync (@livliv/player/voice) and face tracking
 // (@livliv/player/tracking) work for it the same way. Each frame the pose is put together as Player does it (your params,
 // the idle motion, the drivers, actions, expressions); the Body turns it into its own picture.
-import { ActionPlayer, type ActionId } from './runtime/actions'
-import { pickLabel, uiLang, type Labels } from './runtime/format'
-import { PARAM_RANGES, defaultParams, type Params } from './runtime/params'
-import { Idle, type Seen } from './follow'
-import type { Driver, Frame, Host, View } from './index'
+import { pickLabel, type Labels } from './runtime/format'
+import { defaultParams, type Params } from './runtime/params'
+import { LivLivError, PlayerBase, aborted, contextGone, readBody, type LoadJob, type LoadOptions, type PlayerOptions } from './base'
+import type { Seen } from './follow'
+import { claimCanvas } from './release'
+
+export { LivLivError }
+export type { ActionId, Driver, Frame, Host, LivLivErrorCode, LoadOptions, LoadProgress, PlayerOptions, View } from './base'
 
 /** an expression a Body can show: `labels` its names by language (BCP 47 tag -> name), `label` the one to fall back on */
 export interface BodyExpression { id: string; label: string; labels?: Labels }
@@ -25,6 +28,9 @@ export interface Body {
   /** loads from its files (by file name); its name and the expressions it can show. If it rejects, the character before
    *  must stay as it is */
   load(files: Map<string, Blob>): Promise<{ name: string; expressions: BodyExpression[]; meta?: BodyMeta }>
+  /** optional: the WebGL context it draws with, once it has one: what lets the player say when it is lost and give it up
+   *  (dispose({ release: true })). A Body without WebGL leaves this out */
+  context?(): WebGLRenderingContext | WebGL2RenderingContext | null
   /** draws the pose into the canvas, w × h device pixels, dt seconds after the last frame */
   render(canvas: HTMLCanvasElement, pose: Pose, w: number, h: number, dt: number): void
   /** where the head is, in shares of the canvas (from the top left) and its radii */
@@ -50,223 +56,110 @@ export interface BodyInfo {
  *  or URL (`{ closed: 'me-closed.png', open: 'me-open.png' }`). Files are known by their name, without folders */
 export type BodySource = string | URL | Blob | FileList | Iterable<File> | Map<string, Blob | string> | Record<string, Blob | string>
 
-export interface BodyPlayerOptions {
-  /** move by itself: breathe, blink, sway, look around (default true) */
-  idle?: boolean
-  /** the eyes and head follow the pointer anywhere on the page ('page', the default), over the canvas, or not */
-  followPointer?: 'page' | 'canvas' | false
-  /** drawing-buffer pixels per CSS pixel at most (default 2) */
-  maxPixelRatio?: number
-  /** start the frame loop at once (default true) */
-  autoplay?: boolean
-  /** the language expression names are picked in (default the browser's) */
-  lang?: string
-}
+export type BodyPlayerOptions = PlayerOptions
 
 /** the most a body's files may hold in all (a VRM is usually 5-50 MB) */
 export const BODY_LIMIT = 256 * 2 ** 20
 
 const SMILE: Labels = { en: 'Smile', zh: '笑', 'zh-Hant': '笑', ja: '笑顔' }
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
 /** Plays a character a Body draws, with the API of Player where it applies (no mark, no `puppet`, no `view.head`) */
-export class BodyPlayer implements Host {
-  readonly canvas: HTMLCanvasElement
+export class BodyPlayer extends PlayerBase<BodyInfo> {
   readonly body: Body
-  /** your values for the pose and face (ranges in PARAM_RANGES). The player never changes them */
-  readonly params: Params = defaultParams()
-  idle: boolean
-  followPointer: 'page' | 'canvas' | false
-  /** x, y move the character by shares of the canvas (y up), zoom scales it (`head` is not used) */
-  readonly view: View = { x: 0, y: 0, zoom: 1, head: false }
+  /** see PlayerOptions.maxPixelRatio */
   maxPixelRatio: number
-  readonly lang: string
-
-  private info: BodyInfo | null = null
-  private pose: Pose = { params: defaultParams(), move: { x: 0, y: 0, s: 1 }, expr: {} }
-  private idler = new Idle()
-  /** last frame's: a face tracker drove it, the mouth moved */
-  private was = { tracked: false, mouth: 0 }
-  private actions = new ActionPlayer()
-  private drivers: Driver[] = []
-  private expr: Record<string, number> = {}
-  private smile = 0
+  private pose: Pose
   private time = 0
-  private raf = 0
-  private last = 0
-  private visible = true
-  private io?: IntersectionObserver
-  private queue: Promise<unknown> = Promise.resolve()
-  private disposed = false
-  private frame: Frame & { move: { x: number; y: number; s: number } }
 
   constructor(canvas: HTMLCanvasElement, body: Body, options: BodyPlayerOptions = {}) {
-    this.canvas = canvas
+    claimCanvas(canvas)
+    const pose: Pose = { params: defaultParams(), move: { x: 0, y: 0, s: 1 }, expr: {} }
+    super(canvas, pose.params, options)
+    this.pose = pose
     this.body = body
-    this.idle = options.idle ?? true
-    this.followPointer = options.followPointer ?? 'page'
     this.maxPixelRatio = options.maxPixelRatio ?? 2
-    this.lang = options.lang || uiLang()
-    const P = this.pose.params
-    this.frame = {
-      params: P, dt: 0, time: 0, tracked: false, move: { x: 0, y: 0, s: 1 },
-      add(o) {
-        for (const [k, v] of Object.entries(o) as [keyof Params, number | undefined][]) {
-          if (v) P[k] = clamp(P[k] + v, PARAM_RANGES[k][0], PARAM_RANGES[k][1])
-        }
-      },
-    }
-    addEventListener('pointermove', this.onMove)
-    document.addEventListener('pointerleave', this.onLeave)
-    if (typeof IntersectionObserver !== 'undefined') {
-      this.io = new IntersectionObserver((e) => { this.visible = e[e.length - 1].isIntersecting })
-      this.io.observe(canvas)
-    }
-    if (options.autoplay ?? true) this.play()
   }
 
-  /** the loaded character (null before the first load) */
-  get model(): BodyInfo | null { return this.info }
-  get expressions() { return this.info?.expressions ?? [] }
-  get playing() { return this.raf !== 0 }
+  /** the Body's own word for it: asking the canvas would start a context on one that may be meant for 2D
+   *  @internal */
+  protected get gl() { return this.body.context?.() ?? null }
+  /** @internal */
+  protected get drawable() { return !!this.info }
+  /** @internal */
+  protected get clock() { return this.time }
+  /** @internal */
+  protected get shownExpr() { return this.pose.expr }
 
-  /** Loads a character from its files (see BodySource) in place of the one before (a failed load keeps it). Loads run one
-   *  after another */
-  load(source: BodySource): Promise<BodyInfo> {
-    const run = this.queue.then(async () => {
-      const stillHere = () => { if (this.disposed) throw new Error('LivLiv: the player was disposed') }
-      stillHere()
+  /** the body's head in the terms the idle's pointAt reads a puppet in (its canvas shares as clip space)
+   *  @internal */
+  protected seen(): Seen {
+    const hd = this.info ? this.body.head() : { x: 0.5, y: 0.3, rx: 0.15, ry: 0.12 }
+    return { model: { anchors: { head: { cx: 2 * hd.x - 1, cy: 2 * hd.y - 1, rx: 2 * hd.rx, ry: 2 * hd.ry } } } as Seen['model'], lastView: [1, 1, 0, 0, 2, 2] }
+  }
+
+  /** Loads a character from its files (see BodySource) in place of the one before (a failed load keeps it). A new load
+   *  replaces one still downloading or waiting, which rejects with an AbortError (see LoadOptions); one whose character is
+   *  already going in finishes first, since a Body swaps it inside, and the newer one then follows */
+  load(source: BodySource, options: LoadOptions = {}): Promise<BodyInfo> {
+    return this.start(options, (job) => this.inTurn(async () => {
+      const { signal } = job
+      if (signal.aborted) throw signal.reason
       this.body.attach?.(this.canvas)
-      const files = await filesOf(source)
-      stillHere()
+      const files = await filesOf(source, job)
+      if (signal.aborted) throw signal.reason
+      job.build()
       const got = await this.body.load(files)
-      if (this.disposed) this.body.dispose()  // disposed while it loaded: nothing of it may stay
-      stillHere()
+      if (this.disposed) { this.body.dispose(); throw aborted('the player was disposed') }  // disposed while it loaded: nothing of it may stay
+      if (this.contextLost) throw contextGone()
       const ex = [{ id: 'smile', label: '', labels: SMILE }, ...got.expressions.filter((e) => e.id !== 'smile')
         .map((e) => ({ id: e.id, label: e.label, labels: e.labels ?? { en: e.label } }))]
       this.info = { name: got.name, format: this.body.format, meta: got.meta ?? null,
         expressions: ex.map((e) => ({ id: e.id, label: pickLabel(e.labels, this.lang, e.label || e.id), labels: e.labels })) }
-      this.expr = {}; this.smile = 0; this.pose.expr = {}
-      if (!this.playing) this.draw(0)
+      this.neutral(); this.pose.expr = {}
+      if (!this.playing) this.resize()
       return this.info
-    })
-    this.queue = run.catch(() => {})
-    return run
+    }))
   }
 
-  /** as Player's: an expression by id (smile is the smile param), easing over; null back to neutral */
-  setExpression(id: string | null, weight = 1): boolean {
-    if (id !== null && !this.expressions.some((e) => e.id === id)) return false
-    const w = clamp(weight, 0, 1)
-    this.smile = id === 'smile' ? w : 0
-    this.expr = id === null || id === 'smile' ? {} : { [id]: w }
-    return true
-  }
-
-  act(action: ActionId) { this.actions.play(action) }
-  lookAt(x: number | null, y = 0) {
-    this.idler.lookAt(this.seen(), x === null ? null : clamp(x, -1, 1), clamp(y, -1, 1), this.canvas.clientWidth, this.canvas.clientHeight)
-  }
-  blink() { this.idler.blink(this.time) }
-
-  use(driver: Driver): () => void {
-    if (this.disposed) { driver.dispose?.(); return () => {} }  // as Player's: what started meanwhile does not stay on
-    this.drivers.push(driver)
-    this.drivers.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    return () => {
-      const i = this.drivers.indexOf(driver)
-      if (i >= 0) { this.drivers.splice(i, 1); driver.dispose?.() }
-    }
-  }
-
-  play() {
-    if (this.raf || this.disposed) return
-    this.last = performance.now()
-    const loop = (now: number) => {
-      this.raf = requestAnimationFrame(loop)
-      const dt = Math.min(0.05, (now - this.last) / 1000)
-      this.last = now
-      if (this.visible) this.draw(dt)
-    }
-    this.raf = requestAnimationFrame(loop)
-  }
-
-  pause() { cancelAnimationFrame(this.raf); this.raf = 0 }
-  /** draws now at the canvas's current size */
-  resize() { this.draw(0) }
-  /** the current frame as a PNG data URL */
-  snapshot(): string { this.draw(0); return this.canvas.toDataURL('image/png') }
-
-  dispose() {
-    if (this.disposed) return
-    this.pause()
-    this.disposed = true
-    removeEventListener('pointermove', this.onMove)
-    document.removeEventListener('pointerleave', this.onLeave)
-    this.io?.disconnect()
-    for (const d of this.drivers.splice(0)) d.dispose?.()
-    this.body.dispose()
-    this.info = null
-  }
-
-  private draw(dt: number) {
-    if (!this.info) return
-    this.time += dt
-    const P = this.pose.params, f = this.frame
-    this.idler.shown(P)
-    Object.assign(P, this.params)
-    if (this.idle) {
-      this.idler.apply(P, this.time, dt, { busy: this.actions.busy || this.was.mouth > 0.05, tracked: this.was.tracked,
-        faceFree: !this.smile && !Object.values(this.pose.expr).some((v) => v > 0.02) })
-    }
-    Object.assign(f, { dt, time: this.time, tracked: false })
-    Object.assign(f.move, { x: 0, y: 0, s: 1 })
-    for (const d of this.drivers) d.update(f, this)
-    this.was = { tracked: f.tracked, mouth: P.mouthOpen }
-    const A = this.actions
-    f.add(A.update(dt))
-    if (this.smile) P.smile = Math.max(P.smile, this.smile)
-    if (A.awayW) for (const [k, v] of Object.entries(A.awayPose(this.time)) as [keyof Params, number][]) P[k] += (v - P[k]) * A.awayW
-    for (const k of Object.keys(P) as (keyof Params)[]) P[k] = clamp(P[k], PARAM_RANGES[k][0], PARAM_RANGES[k][1])
-    // expressions ease in and out; dozing hides them
-    const E = this.pose.expr
-    for (const k of Object.keys(this.expr)) if (!(k in E)) E[k] = 0
-    for (const k of Object.keys(E)) E[k] += ((this.expr[k] ?? 0) * (1 - A.awayW) - E[k]) * Math.min(1, dt * 8)
-    const V = this.view
-    this.pose.move = { x: f.move.x + V.x, y: f.move.y + A.y + V.y, s: f.move.s * V.zoom }
+  /** @internal */
+  protected show(dt: number) {
+    const f = this.frame, V = this.view
+    this.pose.move = { x: f.move.x + V.x, y: f.move.y + this.actions.y + V.y, s: f.move.s * V.zoom }
     const dpr = Math.min(this.maxPixelRatio, window.devicePixelRatio || 1)
     const w = Math.round(this.canvas.clientWidth * dpr), h = Math.round(this.canvas.clientHeight * dpr)
     if (w >= 2 && h >= 2) this.body.render(this.canvas, this.pose, w, h, dt)
+    this.time += dt
   }
 
-  /** the body's head in the terms the idle's pointAt reads a puppet in (its canvas shares as clip space) */
-  private seen(): Seen {
-    const hd = this.info ? this.body.head() : { x: 0.5, y: 0.3, rx: 0.15, ry: 0.12 }
-    return { model: { anchors: { head: { cx: 2 * hd.x - 1, cy: 2 * hd.y - 1, rx: 2 * hd.rx, ry: 2 * hd.ry } } } as Seen['model'], lastView: [1, 1, 0, 0, 2, 2] }
-  }
-  private onMove = (e: PointerEvent) => {
-    if (!this.followPointer) return
-    const r = this.canvas.getBoundingClientRect()
-    const inside = !(e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
-    this.idler.pointer(this.seen(), e.clientX - r.left, e.clientY - r.top, r.width, r.height, this.followPointer === 'page' || inside)
-  }
-  private onLeave = () => this.idler.leave()
+  /** @internal */
+  protected free() { this.body.dispose() }
 }
 
 /** a body's files by name, URLs fetched */
-async function filesOf(source: BodySource): Promise<Map<string, Blob>> {
+async function filesOf(source: BodySource, job: LoadJob): Promise<Map<string, Blob>> {
   const out = new Map<string, Blob>()
   let total = 0
+  // files given by URL come one after another: each is its share of the download
+  const given = source instanceof Map ? [...source.values()] : typeof source === 'object' && !(source instanceof URL) && !(Symbol.iterator in source) && !(source instanceof Blob) ? Object.values(source) : []
+  const urls = typeof source === 'string' || source instanceof URL ? 1 : given.filter((v) => typeof v === 'string').length
+  let came = 0
   const add = async (key: string, v: Blob | string) => {
     const name = key.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'file'
     let b: Blob
     if (typeof v === 'string') {
       const url = new URL(v, document.baseURI).href
-      const r = await fetch(url).catch(() => { throw new Error(`LivLiv: could not load ${url}: unreachable, or on another origin that sends no CORS header`) })
-      if (!r.ok) throw new Error(`LivLiv: could not load ${url} (HTTP ${r.status})`)
-      b = await r.blob()
+      job.progress(came / urls)
+      const unreachable = (e: unknown) => {
+        if (job.signal.aborted) throw e
+        throw new LivLivError('unreachable', `LivLiv: could not load ${url}: unreachable, or on another origin that sends no CORS header`, { cause: e })
+      }
+      const r = await fetch(url, { signal: job.signal }).catch(unreachable)
+      if (!r.ok) throw new LivLivError('http', `LivLiv: could not load ${url} (HTTP ${r.status})`, { status: r.status })
+      b = await readBody(r, job, (p) => (came + p) / urls).catch(unreachable)
+      came++
+      job.progress(came / urls)
     } else b = v
-    if ((total += b.size) > BODY_LIMIT) throw new Error(`LivLiv: the files are larger than ${BODY_LIMIT} bytes`)
+    if ((total += b.size) > BODY_LIMIT) throw new LivLivError('too-large', `LivLiv: the files are larger than ${BODY_LIMIT} bytes`)
     out.set(name, b)
   }
   if (typeof source === 'string' || source instanceof URL) {

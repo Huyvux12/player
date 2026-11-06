@@ -23,11 +23,12 @@
 <script type="module">
   import { Player } from '../dist/index.js'
   import { cameraButton } from './camera.js'
-  import { loadWithFallback, loading, needWebGL, sameSite } from './loading.js'
+  import { loadWithFallback, loading, needWebGL, sameSite, watchContext } from './loading.js'
 
   needWebGL(Player)
   const canvas = document.getElementById('stage'), cover = document.getElementById('cover')
   const player = new Player(canvas)
+  watchContext(player)
   const bar = document.getElementById('bar'), status = document.getElementById('status')
   window.player = player  // to try things in the console
 
@@ -40,16 +41,16 @@
     status.textContent = ''
     const done = loading(canvas, cover, source)
     try {
-      const m = await loadWithFallback(player, source)
+      const m = await loadWithFallback(player, source, { onProgress: done.progress })
       status.textContent = `${m.name} · ${m.format} ${m.version} · mark: ${m.watermark ?? 'none'}${m.meta?.license ? ` · ${m.meta.license.id}` : ''}`
       controls(m)
     } catch (e) {
+      if (e.name === 'AbortError') return  // another was picked meanwhile
       status.textContent = e.message
       // a VRM has its own page here
       if (/VRM/.test(e.message)) { const a = document.createElement('a'); a.href = 'vrm.html'; a.style.color = 'inherit'; a.textContent = ' Open the VRM page'; status.append(a) }
       controls(player.model)
-    }
-    done()
+    } finally { done() }
   }
 
   function controls(m) {
