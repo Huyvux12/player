@@ -6,7 +6,7 @@
   "generator": {
    "name": "livliv.ai"
   },
-  "created": "2026-11-04T15:23:37Z",
+  "created": "2026-11-06T07:25:54Z",
   "license": {
    "id": "LicenseRef-LivLiv-Samples",
    "url": "https://livliv.ai/licenses/samples",
@@ -281,7 +281,7 @@
    "x": 446,
    "y": 578,
    "w": 135,
-   "h": 84,
+   "h": 69,
    "group": "head",
    "depth": 0,
    "role": "neck_shadow"

@@ -1,5 +1,11 @@
 # Changelog
 
+## Next
+
+The featured characters are not in the npm package, so nothing here needs a new version.
+
+- 17 of the 21 featured characters rebuilt, as livliv.ai now shows them, and their covers redrawn.
+
 ## 0.3.0
 
 The first version on npm, with the interface settled first: these change what a page written for 0.2 does.

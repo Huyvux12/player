@@ -6,7 +6,7 @@
   "generator": {
    "name": "livliv.ai"
   },
-  "created": "2026-11-04T15:22:26Z",
+  "created": "2026-11-06T07:25:08Z",
   "license": {
    "id": "LicenseRef-LivLiv-Samples",
    "url": "https://livliv.ai/licenses/samples",
@@ -545,7 +545,7 @@
    "brow_tex": "textures/expr_sad_newbrows.webp",
    "x": 380,
    "y": 229,
-   "w": 251,
+   "w": 252,
    "h": 225,
    "group": "head",
    "depth": 0,
