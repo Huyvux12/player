@@ -279,7 +279,9 @@ export class FaceTracker {
       const x = this.f.x.filter(this.raw.x, dt) - this.zero.x
       this.target.angleX = clamp(x, -30, 30)
       this.target.angleY = clamp(this.f.y.filter(this.raw.y, dt) - this.zero.y, -30, 30)
-      this.target.angleZ = clamp(this.f.z.filter(this.raw.z, dt) - this.zero.z, -30, 30)
+      // Player roll is Y-down, opposite to MediaPipe's Y-up rotation. Convert after calibration so stored poses keep
+      // their existing convention; yaw and horizontal position are unchanged.
+      this.target.angleZ = clamp(this.zero.z - this.f.z.filter(this.raw.z, dt), -30, 30)
       this.target.bodyX = clamp(x * 0.2 + this.pos.x * 0.25 * this.follow, -10, 10)
     }
     if (b) {
