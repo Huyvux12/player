@@ -148,7 +148,7 @@ npm run check          # kiểm tra kiểu
 npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ và types/
 npm test               # unit test và fuzz test (Node 22.18 trở lên, không cần trình duyệt)
 npm run test:browser   # vẽ mọi nhân vật nổi bật trong headless Chromium; chạy một lần trước: npx playwright-core install chromium-headless-shell
-npm run test:engines   # một mẫu nhỏ trên Firefox và WebKit, ở môi trường WebGL2 chạy được (có GPU hoặc software GL); chạy một lần trước: npx playwright-core install firefox webkit
+npm run test:engines   # một mẫu trên Firefox và WebKit, ở môi trường WebGL2 chạy được (có GPU hoặc software GL); chạy một lần trước: npx playwright-core install firefox webkit
 ```
 
 `src/runtime/` là code renderer và chuyển động mà livliv.ai đang chạy; repository này được xuất bản từ code đó. Xem
