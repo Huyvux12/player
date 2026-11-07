@@ -30,8 +30,12 @@
 
 ## Dùng trong trang của bạn
 
+```sh
+npm install @livliv-dev/player
+```
+
 ```js
-import { Player } from '@livliv/player'
+import { Player } from '@livliv-dev/player'
 
 const player = new Player(document.querySelector('canvas'))
 await player.load('characters/k01/')   // thư mục chứa model.json và textures/, hoặc file .livliv
@@ -44,8 +48,8 @@ player.params.mouthOpen = 0.6          // 0..1
 Đồng bộ môi và theo dõi khuôn mặt:
 
 ```js
-import { createSpeech } from '@livliv/player/voice'
-import { startFaceTracking } from '@livliv/player/tracking'   // cần @mediapipe/tasks-vision
+import { createSpeech } from '@livliv-dev/player/voice'
+import { startFaceTracking } from '@livliv-dev/player/tracking'   // cần @mediapipe/tasks-vision
 
 const speech = createSpeech(player)
 button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
@@ -56,9 +60,9 @@ await startFaceTracking(player)
 VRM hay PNGTuber đều dùng chung một API:
 
 ```js
-import { BodyPlayer } from '@livliv/player/body'
-import { VrmBody } from '@livliv/player/vrm'    // cần three và @pixiv/three-vrm
-import { PngBody } from '@livliv/player/png'
+import { BodyPlayer } from '@livliv-dev/player/body'
+import { VrmBody } from '@livliv-dev/player/vrm'    // cần three và @pixiv/three-vrm
+import { PngBody } from '@livliv-dev/player/png'
 
 const vrm = new BodyPlayer(canvasA, new VrmBody())
 await vrm.load('/avatars/me.vrm')
@@ -71,7 +75,8 @@ giới hạn khi đọc file không đáng tin cậy, gói model và phiên bả
 `model.json` v4) có trong [FORMAT.md](FORMAT.md), kèm JSON Schema trong [`schema/`](schema/); các gói xuất trước v4
 được mô tả trong [FORMAT-v3.md](FORMAT-v3.md) và vẫn phát được.
 
-> Chưa có trên npm: hãy build từ repository này rồi import `dist/index.js`.
+> Gói npm chỉ có trình phát. Các nhân vật nổi bật nằm trong [`characters/`](characters/) của repository này: hãy sao chép
+> những nhân vật bạn dùng, kèm giấy phép, vào cạnh trang của bạn.
 
 ## Nhân vật nổi bật
 
@@ -83,9 +88,9 @@ linh vật của LivLiv. Điều khoản có trong [characters/LICENSE.md](chara
 Kujira, Kujira Q và Pen dựa trên tác phẩm của người khác: giấy phép và cách ghi công nêu trên không áp dụng cho các nhân vật này. Nguồn,
 ghi công và điều khoản của các nhân vật này có trong [characters/CREDITS.md](characters/CREDITS.md).
 
-Mỗi nhân vật còn có một `cover.webp` (512 x 768, khoảng 50 KB), là khung hình đầu tiên của nhân vật, không kèm dấu. Hãy đặt ảnh này phía sau canvas với
-`object-fit: contain` rồi cho nhân vật hiện dần lên trên nó, như [example/loading.js](example/loading.js) đã làm: trang có ngay
-một hình ảnh, và bố cục không bị giật.
+Mỗi nhân vật còn có một `cover.webp` (512 x 768, khoảng 50 KB), là khung hình đầu tiên của nhân vật, không kèm dấu. `player.load(source, { poster })`
+hiện ảnh này trên canvas cho đến khung hình đầu tiên. Muốn có ảnh trước khi script chạy, hãy đặt ảnh này phía sau canvas với
+`object-fit: contain` rồi cho nhân vật hiện dần lên trên nó, như [example/loading.js](example/loading.js) đã làm.
 
 | id | tên | id | tên | id | tên |
 |---|---|---|---|---|---|
@@ -143,6 +148,7 @@ npm run check          # kiểm tra kiểu
 npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ và types/
 npm test               # unit test và fuzz test (Node 22.18 trở lên, không cần trình duyệt)
 npm run test:browser   # vẽ mọi nhân vật nổi bật trong headless Chromium; chạy một lần trước: npx playwright-core install chromium-headless-shell
+npm run test:engines   # một mẫu nhỏ trên Firefox và WebKit, ở môi trường WebGL2 chạy được (có GPU hoặc software GL); chạy một lần trước: npx playwright-core install firefox webkit
 ```
 
 `src/runtime/` là code renderer và chuyển động mà livliv.ai đang chạy; repository này được xuất bản từ code đó. Xem
