@@ -10,7 +10,7 @@
   Comes with 21 featured characters in different styles, ready to use.
 </p>
 
-<p align="center"><b>English</b> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><b>English</b> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.vi.md">Tiếng Việt</a></p>
 
 <p align="center"><img src="media/demo.gif" alt="Featured characters breathing, blinking, turning their heads and talking" width="720"></p>
 

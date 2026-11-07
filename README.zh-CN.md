@@ -10,7 +10,7 @@
   自带 21 个风格各异的精选角色，即开即用。
 </p>
 
-<p align="center"><a href="README.md">English</a> · <b>中文</b> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><a href="README.md">English</a> · <b>中文</b> · <a href="README.ja.md">日本語</a> · <a href="README.vi.md">Tiếng Việt</a></p>
 
 <p align="center"><img src="media/demo.gif" alt="精选角色在呼吸、眨眼、转头、说话" width="720"></p>
 
