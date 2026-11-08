@@ -29,6 +29,12 @@
   `/example/vrm.html` 是 PNGTuber 和 VRM。
 - **在 livliv.ai 上**：那里的每个角色页都用同一套渲染播放这个角色。从 [livliv.ai/discover](https://livliv.ai/discover) 开始。
 
+## Project LivLiv
+
+Project LivLiv 希望让每个人都能创作自己的角色。我们正在开源 AI 角色创作工具链、播放器及其播放协议，以及展示角色的舞台。
+
+欢迎加入我们的 [Discord](https://discord.gg/ac5qF36T2H) 社区，并在 [X（Twitter）](https://x.com/livliv_ai) 上关注我们。
+
 ## 在自己的页面里用
 
 ```sh
@@ -110,7 +116,8 @@ LivLiv Player 和 `.livliv` 格式是 LivLiv 独立做的，没有用 Live2D 的
   style="border:0;background:transparent"></iframe>
 ```
 
-同一个 `/live/<id>` 页面背景透明，可以直接作为 OBS 的浏览器源。
+同一个 `/live/<id>` 页面背景透明，可以直接作为 OBS 的浏览器源。\
+(Powered by [https://livliv.ai](https://livliv.ai))
 
 ## 开发
 

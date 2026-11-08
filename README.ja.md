@@ -27,6 +27,13 @@
   `/example/vrm.html` は PNGTuber と VRM です。
 - **livliv.ai で**：各キャラクターのページで、同じレンダラーがそのキャラクターを動かしています。[livliv.ai/discover](https://livliv.ai/discover) からどうぞ。
 
+## Project LivLiv
+
+Project LivLiv は、誰もが自分のキャラクターを作れるようにしたいと考えています。
+AI を使ったキャラクター制作のツールチェーン、プレイヤーとその再生プロトコル、キャラクターを披露できるステージをオープンソース化しています。
+
+ぜひ [Discord](https://discord.gg/ac5qF36T2H) に参加し、[X（Twitter）](https://x.com/livliv_ai) で LivLiv をフォローしてください。
+
 ## 自分のページで使う
 
 ```sh
@@ -108,7 +115,8 @@ livliv.ai でのキャラクター制作には AI を使います。プレイヤ
   style="border:0;background:transparent"></iframe>
 ```
 
-同じ `/live/<id>` ページは背景が透明なので、そのまま OBS のブラウザソースに使えます。
+同じ `/live/<id>` ページは背景が透明なので、そのまま OBS のブラウザソースに使えます。\
+(Powered by [https://livliv.ai](https://livliv.ai))
 
 ## 開発
 

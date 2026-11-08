@@ -28,6 +28,12 @@
 - **Trên livliv.ai**: trang của từng nhân vật ở đó cũng dùng chính bộ renderer này để chạy nhân vật. Bắt đầu tại
   [livliv.ai/discover](https://livliv.ai/discover).
 
+## Project LivLiv
+
+Project LivLiv mong muốn ai cũng có thể tạo nhân vật của riêng mình. Chúng tôi đang mở mã nguồn cho bộ công cụ tạo nhân vật bằng AI, trình phát và giao thức phát đi kèm, cùng một sân khấu để giới thiệu nhân vật.
+
+Mời bạn tham gia cộng đồng [Discord](https://discord.gg/ac5qF36T2H) và theo dõi chúng tôi trên [X (Twitter)](https://x.com/livliv_ai).
+
 ## Dùng trong trang của bạn
 
 ```sh
@@ -136,7 +142,8 @@ rig thủ công.
   style="border:0;background:transparent"></iframe>
 ```
 
-Chính trang `/live/<id>` này có nền trong suốt và dùng được làm Browser Source trong OBS.
+Chính trang `/live/<id>` này có nền trong suốt và dùng được làm Browser Source trong OBS.\
+(Powered by [https://livliv.ai](https://livliv.ai))
 
 ## Phát triển
 
