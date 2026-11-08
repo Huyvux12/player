@@ -298,6 +298,13 @@ try {
     && is(png.shown.blink, [0, 0, 255]) && is(png.shown.blinkOpen, [255, 255, 0]) && png.tracked && png.angle > 0 && png.mouth > 0.3
   if (!pngOk) failed++
   console.log(`${pngOk ? 'ok  ' : 'FAIL'} PNGTuber: ${png.error ?? `pictures ${['closed', 'open', 'blink', 'blinkOpen'].map((k) => png.shown[k].join(',')).join(' / ')}, face tracked ${png.tracked} (turn ${png.angle.toFixed(2)}°), speech opens the mouth to ${png.mouth.toFixed(2)}`}`)
+  const rate = await page.evaluate(() => window.runSpeechRate())
+  const secs = (bs) => bs.reduce((s, b) => s + b.seconds, 0)
+  const rateOk = (bs, want) => bs.length > 0 && bs.every((b) => b.rate === want) && Math.abs(secs(bs) - 1) < 0.02
+  // decoded whole, the browser resamples to its own rate: only the second counts there
+  const speechOk = rate.bad100.length > 0 && rate.idleFired && rateOk(rate.wav16, 16000) && rateOk(rate.wav24, 24000) && rate.generic16.length > 0 && Math.abs(secs(rate.generic16) - 1) < 0.02
+  if (!speechOk) failed++
+  console.log(`${speechOk ? 'ok  ' : 'FAIL'} speech keeps a WAV's own rate: bad rate ${JSON.stringify(rate.bad100)} (idle fired ${rate.idleFired}), 16 kHz ${JSON.stringify(rate.wav16)}, 24 kHz ${JSON.stringify(rate.wav24)}, decoded whole ${JSON.stringify(rate.generic16)}`)
   const vrmOk = !v.error && v.format === 'vrm' && v.share > 0.02 && v.happy && v.smile && !v.unknown && v.tracked && v.head
     && ['Smile', 'Happy', 'Sad', 'Surprised', 'Wink'].every((l) => v.expressions.includes(l))
   if (!vrmOk) failed++
