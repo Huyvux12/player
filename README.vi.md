@@ -30,9 +30,12 @@
 
 ## Project LivLiv
 
-Project LivLiv mong muốn ai cũng có thể tạo nhân vật của riêng mình. Chúng tôi đang mở mã nguồn cho bộ công cụ tạo nhân vật bằng AI, trình phát và giao thức phát đi kèm, cùng một sân khấu để giới thiệu nhân vật.
+Chúng tôi mong ai cũng có thể tạo nên nhân vật từ trí tưởng tượng của chính mình.
 
-Mời bạn tham gia cộng đồng [Discord](https://discord.gg/ac5qF36T2H) và theo dõi chúng tôi trên [X (Twitter)](https://x.com/livliv_ai).
+Chúng tôi đang mở mã nguồn cho bộ công cụ tạo nhân vật bằng AI, trình phát và giao thức phát đi kèm,
+cùng một sân khấu để những nhân vật ấy ra mắt khán giả.
+
+Ghé [Discord](https://discord.gg/ac5qF36T2H) trò chuyện với chúng tôi và theo dõi LivLiv trên [X (Twitter)](https://x.com/livliv_ai) nhé.
 
 ## Dùng trong trang của bạn
 

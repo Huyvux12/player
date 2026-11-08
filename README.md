@@ -30,10 +30,12 @@
 
 ## Project LivLiv
 
-Project LivLiv aims to make character creation accessible to everyone. We're open-sourcing our AI character creation
-toolchain, the player and its playback protocol, and a stage for showcasing characters.
+We want the art of creating characters to belong to everyone.
 
-Join us on [Discord](https://discord.gg/ac5qF36T2H) and follow us on [X (Twitter)](https://x.com/livliv_ai).
+We're open-sourcing our AI tools for character creation, the player and its playback protocol, and a stage
+where your characters can meet an audience.
+
+Come say hello on [Discord](https://discord.gg/ac5qF36T2H) and follow us on [X (Twitter)](https://x.com/livliv_ai).
 
 ## Use it in your page
 

@@ -31,9 +31,11 @@
 
 ## Project LivLiv
 
-Project LivLiv 希望让每个人都能创作自己的角色。我们正在开源 AI 角色创作工具链、播放器及其播放协议，以及展示角色的舞台。
+我们希望，创造角色这件事能属于每一个人。
 
-欢迎加入我们的 [Discord](https://discord.gg/ac5qF36T2H) 社区，并在 [X（Twitter）](https://x.com/livliv_ai) 上关注我们。
+我们正在开源 AI 角色创作工具链、播放器与播放协议，还有一方舞台，让你创作的角色与大家见面。
+
+欢迎来 [Discord](https://discord.gg/ac5qF36T2H) 聊聊角色创作，也可以在 [X（Twitter）](https://x.com/livliv_ai) 上关注我们。
 
 ## 在自己的页面里用
 
