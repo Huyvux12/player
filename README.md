@@ -28,6 +28,13 @@
 - **On livliv.ai**: each character's page there plays it with the same renderer. Start at
   [livliv.ai/discover](https://livliv.ai/discover).
 
+## Project LivLiv
+
+Project LivLiv aims to make character creation accessible to everyone. We're open-sourcing our AI character creation
+toolchain, the player and its playback protocol, and a stage for showcasing characters.
+
+Join us on [Discord](https://discord.gg/ac5qF36T2H) and follow us on [X (Twitter)](https://x.com/livliv_ai).
+
 ## Use it in your page
 
 ```sh
@@ -137,7 +144,8 @@ hand-rigged.
   style="border:0;background:transparent"></iframe>
 ```
 
-The same `/live/<id>` page has a transparent background and works as an OBS Browser Source.
+The same `/live/<id>` page has a transparent background and works as an OBS Browser Source.\
+(Powered by [https://livliv.ai](https://livliv.ai))
 
 ## Develop
 
