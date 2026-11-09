@@ -377,5 +377,35 @@
     } catch (e) { out.vrm = { error: String(e.message || e) } }
     return out
   }
+
+  /** a WAV's own sample rate decides how long it plays (issue #6): 16 kHz stays one second on the streaming path,
+   *  a 24 kHz clip and the same bytes decoded whole stay one second too */
+  window.runSpeechRate = async () => {
+    const out = {}
+    const c = document.createElement('canvas')
+    c.style.cssText = 'width: 200px; height: 240px'
+    document.body.append(c)
+    const p = new BodyPlayer(c, new PngBody(), { autoplay: false, idle: false })
+    await p.load({ closed: await solid('#ff0000'), open: await solid('#00ff00') })
+    const native = AudioContext.prototype.createBuffer
+    let seen = []
+    AudioContext.prototype.createBuffer = function (...a) { const b = native.apply(this, a); if (b.length > 1) seen.push({ frames: b.length, rate: b.sampleRate, seconds: b.duration }); return b }
+    const speech = createSpeech(p)
+    speech.unlock(); seen = []  // unlock() makes a 1-frame buffer of its own
+    out.idleFired = true
+    const idle = () => new Promise((r) => { speech.onIdle = () => r(true); setTimeout(() => r(false), 10000) })
+    const play = async (clip) => { seen = []; speech.say(clip); out.idleFired &&= await idle(); return seen }
+    try {
+      out.bad100 = await play(wav(1, 100)) // a corrupt rate must not wedge the queue (issue #6)
+      out.wav16 = await play(wav(1, 16000))
+      out.wav24 = await play(wav(1, 24000))
+      const b16 = wav(1, 16000)
+      out.generic16 = await play(new Blob([await b16.arrayBuffer()], { type: 'application/octet-stream' }))
+    } finally {
+      AudioContext.prototype.createBuffer = native
+      speech.dispose(); p.dispose(); c.remove()
+    }
+    return out
+  }
 </script>
 </html>

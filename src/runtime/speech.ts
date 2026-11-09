@@ -260,6 +260,7 @@ class Incoming {
       if (value?.length) b = b.length ? cat(b, value) : value
       if (fmt === undefined) fmt = wavFmt(b, !!done)
       if (fmt) { // whole sample frames out now, a split one waits for its other byte
+        if (fmt.rate >= 3000 && fmt.rate <= 384000) this.rate = fmt.rate // the file's own rate, not the voices' 24000
         const step = 2 * fmt.channels, n = Math.floor((b.length - fmt.data) / step)
         if (n > 0) { this.push(pcm16(b, fmt.data, n, step)); b = b.slice(fmt.data + n * step); fmt.data = 0 }
       }
